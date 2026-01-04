@@ -4,7 +4,7 @@
 
 ## 功能
 - ✨ 现代化的 UI 设计 (Glassmorphism)
-- 🤖 集成 Gemini 1.5 Flash 模型
+- 🤖 集成 Gemini 2.5 Flash 模型
 - 📹 支持上传视频和图片进行多模态对话
 - 🚀 一键部署到 Vercel
 
