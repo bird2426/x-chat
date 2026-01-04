@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gemini Video Chatbot
 
-## Getting Started
+这是一个基于 [Next.js](https://nextjs.org/) 和 Google Gemini API 的简单聊天机器人，支持**视频**和**图片**上传处理。
 
-First, run the development server:
+## 功能
+- ✨ 现代化的 UI 设计 (Glassmorphism)
+- 🤖 集成 Gemini 1.5 Flash 模型
+- 📹 支持上传视频和图片进行多模态对话
+- 🚀 一键部署到 Vercel
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 快速开始
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1.  **安装依赖**
+    ```bash
+    npm install
+    ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+2.  **配置环境变量**
+    创建 `.env.local` 文件并添加你的 Google API Key：
+    ```env
+    GOOGLE_API_KEY=你的_GOOGLE_API_KEY
+    ```
+    (你可以从 [Google AI Studio](https://aistudio.google.com/) 获取 key)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3.  **运行开发服务器**
+    ```bash
+    npm run dev
+    ```
+    打开 [http://localhost:3000](http://localhost:3000) 即可使用。
 
-## Learn More
+## 部署到 Vercel (非常简单！)
 
-To learn more about Next.js, take a look at the following resources:
+1.  将本项目上传到 GitHub。
+2.  登录 [Vercel](https://vercel.com/)。
+3.  点击 "Add New..." -> "Project"，选择刚才的 GitHub 仓库。
+4.  在部署设置的 **Environment Variables** 部分，添加 `GOOGLE_API_KEY`。
+5.  点击 **Deploy**。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+等待几十秒，你的聊天机器人就上线了！
