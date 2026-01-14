@@ -12,7 +12,6 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use gemini-2.5-flash as it is fast and supports video/multimodal
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const { message, media, history } = await req.json();

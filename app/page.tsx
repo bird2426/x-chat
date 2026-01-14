@@ -6,6 +6,12 @@ import ReactMarkdown from 'react-markdown';
 interface Message {
   role: 'user' | 'bot';
   content: string;
+  media?: {
+    data: string;
+    mimeType: string;
+    preview: string;
+    type: 'image' | 'video';
+  };
 }
 
 interface MediaFile {
@@ -68,7 +74,14 @@ export default function Home() {
     const currentMedia = media;
 
     // Add user message to state
-    const newMessages: Message[] = [...messages, { role: 'user', content: userMessage || (currentMedia ? '[发送了文件]' : '') }];
+    const newMessages: Message[] = [
+      ...messages,
+      {
+        role: 'user',
+        content: userMessage,
+        media: currentMedia ? { ...currentMedia } : undefined
+      }
+    ];
     setMessages(newMessages);
     setInput('');
     clearMedia();
@@ -137,7 +150,16 @@ export default function Home() {
                 <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #8b5cf6, #d946ef)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>AI</div>
               )}
               <div className={`message-content ${msg.role === 'user' ? 'message-user' : 'message-bot'}`}>
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                {msg.media && (
+                  <div className="message-media">
+                    {msg.media.type === 'video' ? (
+                      <video src={msg.media.preview} className="chat-media video-player" controls playsInline />
+                    ) : (
+                      <img src={msg.media.preview} className="chat-media" alt="chat" onClick={() => window.open(msg.media?.preview, '_blank')} />
+                    )}
+                  </div>
+                )}
+                {msg.content && <ReactMarkdown>{msg.content}</ReactMarkdown>}
               </div>
             </div>
           ))}
