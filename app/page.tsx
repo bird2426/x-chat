@@ -24,7 +24,7 @@ interface MediaFile {
 export default function Home() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'bot', content: '你好! 我是你的 AI 助手。你可以发送文字、图片或视频给我，我们来聊聊吧！' }
+    { role: 'bot', content: '你好! 我是杨村 AI 助手。你可以发送文字、图片或视频给我，我们来聊聊吧！' }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [media, setMedia] = useState<MediaFile | null>(null);
