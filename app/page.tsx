@@ -406,16 +406,21 @@ export default function Home() {
                   )}
                   {/* 工具调用结果可视化展示 */}
                   {msg.toolCalls && msg.toolCalls.map((tc, i) => {
+                    const toolName = tc.tool_name.toLowerCase();
+
                     // 尝试解析 JSON 结果
                     let data;
                     try {
                       data = JSON.parse(tc.result);
                     } catch (e) {
-                    if (toolName === 'search_web' && data.results) {
+                      return null;
+                    }
+
+                    if (toolName === 'search_web' && data?.results) {
                       return (
                         <div key={i} className={`${styles.toolCard} ${styles.searchCard}`}>
                           <div style={{ fontSize: '12px', opacity: 0.7, padding: '0 4px', marginBottom: '8px' }}>
-                            🔍 搜索: "{data.query}" {data.is_simulated ? '(模拟)' : ''}
+                            🔍 搜索: &quot;{data.query}&quot; {data.is_simulated ? '(模拟)' : ''}
                           </div>
                           {data.results.map((item: any, idx: number) => (
                             <a key={idx} href={item.url} target="_blank" rel="noopener noreferrer" className={styles.searchItem}>
@@ -427,11 +432,6 @@ export default function Home() {
                         </div>
                       );
                     }
-
-                    return null;
-                    }
-
-                    const toolName = tc.tool_name.toLowerCase();
 
                     // 只为天气工具提供特殊 UI，其他工具（搜索、计算、时间）直接由 AI 文本回答
                     if (toolName === 'get_weather' && data.current) {
