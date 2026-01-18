@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gemini Video Chat",
+  title: "X-Chat",
   description: "A simple video-capable chatbot using Google Gemini",
 };
 

@@ -3,16 +3,36 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import styles from './page.module.css';
+import { AI_PROVIDERS } from '@/lib/ai-providers';
 
+// 工具调用的接口定义
+interface ToolCall {
+  tool_name: string;           // 工具名称
+  arguments: Record<string, any>;  // 工具参数
+  result: string;              // 工具执行结果
+}
+
+// 错误信息的接口定义
+interface ErrorInfo {
+  type: string;                     // 错误类型
+  userMessage: string;              // 用户友好的错误描述
+  suggestion: string;               // 解决建议
+  alternativeProvider?: string;     // 推荐的备用 provider
+  alternativeModel?: string;        // 推荐的备用 model
+}
+
+// 消息的接口定义
 interface Message {
-  role: 'user' | 'bot';
-  content: string;
-  media?: {
-    data: string;
-    mimeType: string;
-    preview: string;
-    type: 'image' | 'video';
+  role: 'user' | 'bot';        // 消息角色：用户或机器人
+  content: string;             // 消息内容
+  media?: {                    // 可选的媒体文件
+    data: string;              // base64 编码的数据
+    mimeType: string;          // 文件类型
+    preview: string;           // 预览 URL
+    type: 'image' | 'video';   // 媒体类型
   };
+  toolCalls?: ToolCall[];      // 可选的工具调用记录
+  error?: ErrorInfo;           // 可选的错误信息
 }
 
 interface MediaFile {
@@ -23,12 +43,14 @@ interface MediaFile {
 }
 
 const STORAGE_KEY = 'x-chat-history-v1';
+const STORAGE_PROVIDER_KEY = 'x-chat-provider';
+const STORAGE_MODEL_KEY = 'x-chat-model';
 const HISTORY_LIMIT = 60;
 
 export default function Home() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'bot', content: '你好! 我是杨村 AI 助手。你可以发送文字、图片或视频给我，我们来聊聊吧！' }
+    { role: 'bot', content: '你好！我是你的 AI 助手，很高兴为你服务。' }
   ]);
   const messagesRef = useRef<Message[]>(messages);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,6 +58,14 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Provider and model state
+  const [selectedProvider, setSelectedProvider] = useState(AI_PROVIDERS[0].id);
+  const [selectedModel, setSelectedModel] = useState(AI_PROVIDERS[0].models[0].id);
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  
+  // 工具开关状态 - 默认开启，用户无感
+  const [enableTools, setEnableTools] = useState(true);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -45,15 +75,37 @@ export default function Home() {
   useEffect(() => {
     try {
       const cached = localStorage.getItem(STORAGE_KEY);
-      if (!cached) return;
-      const parsed = JSON.parse(cached) as Pick<Message, 'role' | 'content'>[];
-      if (Array.isArray(parsed) && parsed.length) {
-        setMessages(parsed.slice(-HISTORY_LIMIT));
+      if (cached) {
+        const parsed = JSON.parse(cached) as Pick<Message, 'role' | 'content'>[];
+        if (Array.isArray(parsed) && parsed.length) {
+          setMessages(parsed.slice(-HISTORY_LIMIT));
+        }
+      }
+
+      // Load saved provider and model
+      const savedProvider = localStorage.getItem(STORAGE_PROVIDER_KEY);
+      const savedModel = localStorage.getItem(STORAGE_MODEL_KEY);
+      if (savedProvider) {
+        const provider = AI_PROVIDERS.find(p => p.id === savedProvider);
+        if (provider) {
+          setSelectedProvider(savedProvider);
+          if (savedModel && provider.models.find(m => m.id === savedModel)) {
+            setSelectedModel(savedModel);
+          } else {
+            setSelectedModel(provider.models[0].id);
+          }
+        }
       }
     } catch (err) {
-      console.warn('Failed to load cached chat history', err);
+      console.warn('Failed to load cached data', err);
     }
   }, []);
+
+  // Persist provider and model selection
+  useEffect(() => {
+    localStorage.setItem(STORAGE_PROVIDER_KEY, selectedProvider);
+    localStorage.setItem(STORAGE_MODEL_KEY, selectedModel);
+  }, [selectedProvider, selectedModel]);
 
   // Persist text-only history (avoid storing large media blobs)
   useEffect(() => {
@@ -139,6 +191,22 @@ export default function Home() {
     const userMessage = input.trim();
     const currentMedia = media;
 
+    // Validate media support
+    const currentProvider = AI_PROVIDERS.find(p => p.id === selectedProvider);
+    const currentModel = currentProvider?.models.find(m => m.id === selectedModel);
+    
+    if (currentMedia) {
+      const isVideo = currentMedia.type === 'video';
+      if (isVideo && !currentModel?.supportsVideo) {
+        alert(`模型 ${currentModel?.name} 不支持视频，请选择支持视频的模型或移除视频。`);
+        return;
+      }
+      if (!isVideo && !currentModel?.supportsVision) {
+        alert(`模型 ${currentModel?.name} 不支持图片，请选择支持图片的模型或移除图片。`);
+        return;
+      }
+    }
+
     // Add user message to state
     const newMessages: Message[] = [
       ...messages,
@@ -161,27 +229,79 @@ export default function Home() {
       // Filter out the initial greeting if it's purely frontend
       const history = messages.slice(1).map(m => ({ role: m.role, content: m.content }));
 
+      // 发送请求到后端 API
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage,
           media: currentMedia ? { data: currentMedia.data, mimeType: currentMedia.mimeType } : null,
-          history
+          history,
+          provider: selectedProvider,
+          model: selectedModel,
+          enableTools,  // 传递工具开关状态
         }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) throw new Error(data.error || 'Failed to fetch');
+      if (!res.ok) {
+        // 如果响应不成功，data 已经包含了错误信息
+        const errorMessage = formatErrorMessage(data);
+        setMessages(prev => [...prev, { 
+          role: 'bot', 
+          content: errorMessage,
+          error: data
+        }]);
+        return;
+      }
 
-      setMessages(prev => [...prev, { role: 'bot', content: data.text }]);
+      // 添加 AI 回复（包含工具调用记录）
+      setMessages(prev => [...prev, { 
+        role: 'bot', 
+        content: data.text,
+        toolCalls: data.toolCalls  // 保存工具调用记录
+      }]);
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { role: 'bot', content: '抱歉，出了一点问题，请稍后再试。' }]);
+      
+      // 网络错误或其他异常
+      setMessages(prev => [...prev, { 
+        role: 'bot', 
+        content: '🌐 **网络连接失败**\n\n💡 请检查网络连接后重试\n\n建议：\n- 检查网络连接\n- 切换到其他模型\n- 稍后重试'
+      }]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // 格式化错误消息为用户友好的文本
+  const formatErrorMessage = (errorData: any): string => {
+    const icons: Record<string, string> = {
+      'API_KEY_MISSING': '🔑',
+      'QUOTA_EXCEEDED': '📊',
+      'NETWORK_ERROR': '🌐',
+      'MODEL_CAPABILITY': '⚙️',
+      'RATE_LIMIT': '⏱️',
+      'UNKNOWN': '❌'
+    };
+    
+    let message = `${icons[errorData.errorType] || '❌'} **${errorData.userMessage}**\n\n`;
+    message += `💡 ${errorData.suggestion}`;
+    
+    if (errorData.alternativeProvider && errorData.alternativeModel) {
+      const providerName = errorData.alternativeProvider === 'google' ? 'Google Gemini' : '通义千问';
+      message += `\n\n🔄 建议切换到：**${providerName}**`;
+    }
+    
+    return message;
+  };
+
+  // 快速切换到推荐的模型
+  const handleQuickSwitch = (provider: string, model: string) => {
+    setSelectedProvider(provider);
+    setSelectedModel(model);
+    setShowModelSelector(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -194,19 +314,63 @@ export default function Home() {
     }
   };
 
+  // Get current provider and model info
+  const currentProvider = AI_PROVIDERS.find(p => p.id === selectedProvider);
+  const currentModel = currentProvider?.models.find(m => m.id === selectedModel);
+
   return (
     <div className={styles.page}>
       <div className={styles.panel}>
         <header className={styles.header}>
-          <div className={styles.windowDots} aria-hidden="true">
-            <span />
-            <span />
-            <span />
+          <div className={styles.headerTitle} onClick={() => setShowModelSelector(!showModelSelector)} style={{ cursor: 'pointer', flex: 1 }} title="点击切换模型">
+            <div className={styles.headerName}>
+              {currentProvider?.name}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', marginLeft: '6px', opacity: 0.6 }}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+            <div className={styles.headerSubtitle}>{currentModel?.name}</div>
           </div>
-          <div className={styles.headerTitle}>
-            <div className={styles.headerName}>杨村 AI 助手</div>
-            <div className={styles.headerSubtitle}>Gemini Chat</div>
-          </div>
+          
+          <button 
+            className={styles.headerButton}
+            onClick={() => setShowModelSelector(!showModelSelector)}
+            title="切换模型"
+          >
+            切换模型
+          </button>
+          {showModelSelector && (
+            <div className={styles.modelSelector}>
+              <div className={styles.modelSelectorContent}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>选择 AI 模型</h3>
+                {AI_PROVIDERS.map((provider) => (
+                  <div key={provider.id} style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', opacity: 0.8 }}>
+                      {provider.name}
+                    </div>
+                    {provider.models.map((model) => (
+                      <button
+                        key={model.id}
+                        className={`${styles.modelOption} ${selectedProvider === provider.id && selectedModel === model.id ? styles.modelOptionActive : ''}`}
+                        onClick={() => {
+                          setSelectedProvider(provider.id);
+                          setSelectedModel(model.id);
+                          setShowModelSelector(false);
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '13px', fontWeight: 500 }}>{model.name}</div>
+                          <div style={{ fontSize: '11px', opacity: 0.6, marginTop: '2px' }}>
+                            {model.supportsVideo ? '📹 视频' : model.supportsVision ? '🖼️ 图片' : '💬 文本'}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </header>
 
         <main className={styles.chat} aria-label="Chat">
@@ -240,9 +404,113 @@ export default function Home() {
                       )}
                     </div>
                   )}
+                  {/* 工具调用结果可视化展示 */}
+                  {msg.toolCalls && msg.toolCalls.map((tc, i) => {
+                    // 尝试解析 JSON 结果
+                    let data;
+                    try {
+                      data = JSON.parse(tc.result);
+                    } catch (e) {
+                    if (toolName === 'search_web' && data.results) {
+                      return (
+                        <div key={i} className={`${styles.toolCard} ${styles.searchCard}`}>
+                          <div style={{ fontSize: '12px', opacity: 0.7, padding: '0 4px', marginBottom: '8px' }}>
+                            🔍 搜索: "{data.query}" {data.is_simulated ? '(模拟)' : ''}
+                          </div>
+                          {data.results.map((item: any, idx: number) => (
+                            <a key={idx} href={item.url} target="_blank" rel="noopener noreferrer" className={styles.searchItem}>
+                              <div className={styles.searchTitle}>{item.title}</div>
+                              <div className={styles.searchUrl}>{item.url}</div>
+                              <div className={styles.searchSnippet}>{item.content}</div>
+                            </a>
+                          ))}
+                        </div>
+                      );
+                    }
+
+                    return null;
+                    }
+
+                    const toolName = tc.tool_name.toLowerCase();
+
+                    // 只为天气工具提供特殊 UI，其他工具（搜索、计算、时间）直接由 AI 文本回答
+                    if (toolName === 'get_weather' && data.current) {
+                      // 根据天气代码决定背景色 (简单映射)
+                      let bgClass = styles.weatherBgClear;
+                      const cond = data.current.condition;
+                      if (cond.includes('雨') || cond.includes('雪')) bgClass = styles.weatherBgRain;
+                      else if (cond.includes('阴') || cond.includes('多云')) bgClass = styles.weatherBgCloud;
+
+                      return (
+                        <div key={i} className={`${styles.toolCard} ${styles.weatherCard} ${bgClass}`}>
+                          <div className={styles.weatherHeader}>
+                            <div style={{ fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              📍 {data.location} 
+                            </div>
+                            <div style={{ fontSize: '12px', opacity: 0.8, background: 'rgba(0,0,0,0.2)', padding: '2px 8px', borderRadius: '12px' }}>7日预报</div>
+                          </div>
+                          <div className={styles.weatherMain}>
+                            <div className={styles.weatherIcon}>{data.current.icon}</div>
+                            <div>
+                              <div className={styles.weatherTemp}>{data.current.temp}°</div>
+                              <div className={styles.weatherDetail}>
+                                <span style={{fontSize: '16px', fontWeight: 500}}>{data.current.condition}</span>
+                                <span style={{fontSize: '13px', opacity: 0.9}}>湿度 {data.current.humidity}%</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className={styles.weatherForecast}>
+                            {data.forecast.map((day: any, idx: number) => (
+                              <div key={idx} className={styles.forecastItem}>
+                                <div className={styles.forecastDate}>{day.date}</div>
+                                <div className={styles.forecastIcon}>{day.icon}</div>
+                                <div className={styles.forecastTemp}>{day.max_temp}° / {day.min_temp}°</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })}
+
                   {msg.content && (
                     <div className={styles.bubbleText}>
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  )}
+                  
+                  {/* 错误消息的快速操作按钮 */}
+                  {msg.error && (
+                    <div className={styles.errorActions}>
+                      {msg.error.alternativeProvider && msg.error.alternativeModel && (
+                        <>
+                          <button
+                            className={styles.quickSwitchButton}
+                            onClick={() => handleQuickSwitch(
+                              msg.error!.alternativeProvider!, 
+                              msg.error!.alternativeModel!
+                            )}
+                          >
+                            🔄 切换到 {msg.error.alternativeProvider === 'google' ? 'Google' : 'Qwen'}
+                          </button>
+                          <button
+                            className={styles.manualSwitchButton}
+                            onClick={() => setShowModelSelector(true)}
+                          >
+                            ⚙️ 手动选择
+                          </button>
+                        </>
+                      )}
+                      {!msg.error.alternativeProvider && (
+                        <button
+                          className={styles.manualSwitchButton}
+                          onClick={() => setShowModelSelector(true)}
+                        >
+                          ⚙️ 选择其他模型
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -294,6 +562,7 @@ export default function Home() {
               className={styles.fileInput}
             />
 
+            {/* 上传图片/视频按钮 */}
             <button
               type="button"
               className={styles.iconButton}
@@ -311,7 +580,7 @@ export default function Home() {
             <textarea
               ref={inputRef}
               className={styles.input}
-              placeholder="输入消息…（支持图片/视频）"
+              placeholder="输入消息..."
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}

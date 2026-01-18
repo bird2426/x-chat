@@ -28,31 +28,73 @@
   padding: 16px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(15, 23, 42, 0.35);
+  position: relative;
 }
 
-.windowDots {
+.headerButton {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.headerButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.modelSelector {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(15, 23, 42, 0.98);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 100;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.modelSelectorContent {
+  padding: 16px 18px;
+}
+
+.modelOption {
   display: flex;
+  align-items: center;
   gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(226, 232, 240, 0.95);
+  cursor: pointer;
+  text-align: left;
+  transition: all 120ms ease;
 }
 
-.windowDots span {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  display: inline-block;
-  opacity: 0.9;
+.modelOption:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
-.windowDots span:nth-child(1) {
-  background: #ef4444;
+.modelOptionActive {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
-.windowDots span:nth-child(2) {
-  background: #eab308;
-}
-
-.windowDots span:nth-child(3) {
-  background: #22c55e;
+.modelOptionActive:hover {
+  background: rgba(59, 130, 246, 0.35);
 }
 
 .headerTitle {
@@ -230,10 +272,10 @@
 }
 
 .composer {
-  padding: 12px 14px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(15, 23, 42, 0.55);
+  padding: 14px 16px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.4);
 }
 
 .preview {
@@ -282,14 +324,20 @@
 }
 
 .form {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: flex-end;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(2, 6, 23, 0.35);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.6);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form:focus-within {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .fileInput {
@@ -305,68 +353,303 @@
 }
 
 .iconButton {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(226, 232, 240, 0.75);
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.6);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .iconButton:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(226, 232, 240, 0.95);
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.iconButtonActive {
+  background: rgba(59, 130, 246, 0.2);
+  color: rgba(96, 165, 250, 1);
+}
+
+.iconButtonActive:hover {
+  background: rgba(59, 130, 246, 0.3);
 }
 
 .input {
-  width: 100%;
+  flex: 1;
+  min-height: 40px;
+  max-height: 200px;
   resize: none;
   border: none;
   outline: none;
   background: transparent;
-  color: rgba(226, 232, 240, 0.95);
-  font-size: 1rem;
-  line-height: 1.5;
-  padding: 8px 6px;
-  max-height: 160px;
-  overflow: auto;
+  color: rgba(226, 232, 240, 0.98);
+  font-size: 15px;
+  line-height: 20px;
+  padding: 10px 4px;
+  overflow-y: auto;
   font-family: inherit;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  box-sizing: border-box;
+  margin: 0;
 }
 
 .input::placeholder {
-  color: rgba(148, 163, 184, 0.8);
+  color: rgba(148, 163, 184, 0.5);
+}
+
+.input::-webkit-scrollbar {
+  width: 6px;
+}
+
+.input::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.input::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .send {
-  width: 46px;
-  height: 42px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(59, 130, 246, 0.92);
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(59, 130, 246, 0.95);
   color: white;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 120ms ease, background 120ms ease;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
-.send:hover {
-  background: rgba(37, 99, 235, 0.98);
+.send:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 1);
+  transform: scale(1.05);
 }
 
-.send:active {
-  transform: translateY(1px);
+.send:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .send:disabled {
-  background: rgba(71, 85, 105, 0.65);
+  background: rgba(71, 85, 105, 0.4);
   cursor: not-allowed;
-  transform: none;
+  opacity: 0.5;
+}
+
+/* 工具结果卡片容器 */
+.toolCard {
+  margin: 12px 0;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+/* 天气卡片 */
+.weatherCard {
+  padding: 20px;
+  color: white;
+  position: relative;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.weatherBgClear {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.weatherBgCloud {
+  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+}
+
+.weatherBgRain {
+  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+}
+
+.weatherHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.weatherMain {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.weatherTemp {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.weatherIcon {
+  font-size: 56px;
+  line-height: 1;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+}
+
+.weatherDetail {
+  font-size: 15px;
+  opacity: 0.95;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.weatherForecast {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  scrollbar-width: none; 
+}
+
+.forecastItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 60px;
+  font-size: 13px;
+}
+
+.forecastDate {
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+.forecastIcon {
+  font-size: 28px;
+  margin: 2px 0;
+}
+
+.forecastTemp {
+  font-weight: 600;
+  opacity: 0.9;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* 搜索结果卡片 */
+.searchCard {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.searchItem {
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  transition: background 0.2s;
+  text-decoration: none;
+  display: block;
+}
+
+.searchItem:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.searchTitle {
+  color: #60a5fa;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.searchUrl {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.searchSnippet {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 错误操作按钮容器 */
+.errorActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+/* 快速切换按钮（主要操作，醒目的蓝色） */
+.quickSwitchButton {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9));
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  font-family: inherit;
+}
+
+.quickSwitchButton:hover {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(29, 78, 216, 0.95));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.quickSwitchButton:active {
+  transform: translateY(0);
+}
+
+/* 手动选择按钮（次要操作，半透明灰色） */
+.manualSwitchButton {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(226, 232, 240, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.manualSwitchButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 @media (max-width: 640px) {
@@ -407,5 +690,16 @@
   .avatar {
     width: 30px;
     height: 30px;
+  }
+  
+  /* 移动端错误按钮适配 */
+  .errorActions {
+    flex-direction: column;
+  }
+  
+  .quickSwitchButton,
+  .manualSwitchButton {
+    width: 100%;
+    justify-content: center;
   }
 }
