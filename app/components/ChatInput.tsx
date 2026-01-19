@@ -9,9 +9,10 @@ interface ChatInputProps {
     setMedia: (media: MediaFile | null) => void;
     isLoading: boolean;
     onSubmit: () => void;
+    onStop: () => void;
 }
 
-export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmit }: ChatInputProps) {
+export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmit, onStop }: ChatInputProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -28,6 +29,7 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
         if ((e.nativeEvent as any)?.isComposing) return;
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
+            if (isLoading) return; // Loading state prevents submission
             onSubmit();
         }
     };
@@ -82,7 +84,7 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
                 </div>
             )}
 
-            <form className={styles.form} onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
+            <form className={styles.form} onSubmit={(e) => { e.preventDefault(); isLoading ? onStop() : onSubmit(); }}>
                 <input
                     type="file"
                     accept="image/*,video/*"
@@ -96,6 +98,7 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
                     className={styles.iconButton}
                     onClick={() => fileInputRef.current?.click()}
                     title="上传图片/视频"
+                    disabled={isLoading}
                 >
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -107,24 +110,39 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
                 <textarea
                     ref={inputRef}
                     className={styles.input}
-                    placeholder="输入消息..."
+                    placeholder={isLoading ? "正在思考..." : "输入消息..."}
                     rows={1}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
+                    disabled={isLoading}
                 />
 
-                <button
-                    type="submit"
-                    className={styles.send}
-                    disabled={(!input.trim() && !media) || isLoading}
-                    title="发送"
-                >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="22" y1="2" x2="11" y2="13"></line>
-                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                    </svg>
-                </button>
+                {isLoading ? (
+                    <button
+                        type="button"
+                        className={styles.send}
+                        onClick={onStop}
+                        title="停止生成"
+                        style={{ backgroundColor: '#ef4444' }} // Red color for stop
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0">
+                            <rect x="6" y="6" width="12" height="12" rx="2" />
+                        </svg>
+                    </button>
+                ) : (
+                    <button
+                        type="submit"
+                        className={styles.send}
+                        disabled={!input.trim() && !media}
+                        title="发送"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                )}
             </form>
         </footer>
     );

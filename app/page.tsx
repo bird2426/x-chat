@@ -33,6 +33,7 @@ export default function Home() {
   const [showToast, setShowToast] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // --- 辅助函数 ---
 
@@ -128,6 +129,20 @@ export default function Home() {
     setSelectedModel(modelId);
   };
 
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+
+      // 添加一条"已停止"的消息或仅停止loading
+      setMessages(prev => [...prev, {
+        role: 'bot',
+        content: '⏹️ **生成已停止**'
+      }]);
+    }
+  };
+
   const handleSubmit = async () => {
     if ((!input.trim() && !media) || isLoading) return;
 
@@ -164,6 +179,10 @@ export default function Home() {
     setMedia(null); // 清空输入框媒体，但保留 history 中的
     setIsLoading(true);
 
+    // Create new abort controller
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       // 准备请求历史
       const history = messages.slice(1).map(m => ({ role: m.role, content: m.content }));
@@ -179,6 +198,7 @@ export default function Home() {
           model: selectedModel,
           enableTools: true,
         }),
+        signal: abortController.signal
       });
 
       const data = await res.json();
@@ -199,7 +219,11 @@ export default function Home() {
         toolCalls: data.toolCalls
       }]);
 
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('Fetch aborted');
+        return;
+      }
       console.error(error);
       setMessages(prev => [...prev, {
         role: 'bot',
@@ -207,6 +231,7 @@ export default function Home() {
       }]);
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -256,6 +281,7 @@ export default function Home() {
           setMedia={setMedia}
           isLoading={isLoading}
           onSubmit={handleSubmit}
+          onStop={handleStop}
         />
       </div>
     </div>

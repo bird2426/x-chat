@@ -13,6 +13,7 @@ export function ChatMessage({ message, onQuickSwitch, onManualSwitch }: ChatMess
 
     return (
         <div className={`${styles.row} ${isUser ? styles.rowUser : styles.rowBot}`}>
+            {/* AI Avatar (Left) */}
             {!isUser && <div className={styles.avatar}>AI</div>}
 
             <div className={`${styles.bubble} ${isUser ? styles.bubbleUser : styles.bubbleBot}`}>
@@ -74,6 +75,10 @@ export function ChatMessage({ message, onQuickSwitch, onManualSwitch }: ChatMess
                     </div>
                 )}
             </div>
+
+            {/* User Avatar (Right) */}
+            {isUser && <div className={styles.avatarUser}>ME</div>}
+
         </div>
     );
 }
