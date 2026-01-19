@@ -1,0 +1,110 @@
+.titleContainer {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    cursor: pointer;
+    flex: 1;
+}
+
+.titleName {
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+}
+
+.titleSubtitle {
+    font-size: 12px;
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.selectorOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 99;
+    background: transparent;
+}
+
+.selectorDropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: rgba(15, 23, 42, 0.98);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 100;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    padding: 16px 18px;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+}
+
+.providerGroup {
+    margin-bottom: 12px;
+}
+
+.providerName {
+    fontSize: 13px;
+    fontWeight: 600;
+    marginBottom: 6px;
+    opacity: 0.8;
+}
+
+.modelOption {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(226, 232, 240, 0.95);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+}
+
+.modelOption:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.active {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.active:hover {
+    background: rgba(59, 130, 246, 0.35);
+}
+
+.headerButton {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.headerButton:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
