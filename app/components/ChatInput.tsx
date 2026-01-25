@@ -68,8 +68,15 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
         setMedia(null);
     };
 
+    const handleFortuneClick = () => {
+        if (isLoading) return;
+        setInput("帮我抽个赛博灵签 (扭动)");
+        setTimeout(() => inputRef.current?.focus(), 0);
+    };
+
     return (
         <footer className={styles.composer}>
+
             {/* Media Preview Area */}
             {media && (
                 <div className={styles.preview}>
@@ -105,6 +112,16 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
                         <circle cx="8.5" cy="8.5" r="1.5"></circle>
                         <polyline points="21 15 16 10 5 21"></polyline>
                     </svg>
+                </button>
+
+                <button
+                    type="button"
+                    className={styles.fortuneButton}
+                    onClick={handleFortuneClick}
+                    title="赛博灵签"
+                    disabled={isLoading}
+                >
+                    🥠
                 </button>
 
                 <textarea

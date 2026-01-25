@@ -1,3 +1,5 @@
+/* ModelSelector.module.css - Nagano Bear Theme */
+
 .titleContainer {
     display: flex;
     flex-direction: column;
@@ -8,13 +10,14 @@
 
 .titleName {
     font-size: 14px;
-    font-weight: 650;
+    font-weight: 700;
     letter-spacing: 0.2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     display: flex;
     align-items: center;
+    color: #4b5563;
 }
 
 .titleSubtitle {
@@ -23,6 +26,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: #64748b;
 }
 
 .selectorOverlay {
@@ -32,7 +36,7 @@
     right: 0;
     bottom: 0;
     z-index: 99;
-    background: transparent;
+    background: rgba(0,0,0,0.05);
 }
 
 .selectorDropdown {
@@ -40,71 +44,80 @@
     top: 100%;
     left: 0;
     right: 0;
-    background: rgba(15, 23, 42, 0.98);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.95);
+    border-bottom: 2px solid #fecaca;
     max-height: 400px;
     overflow-y: auto;
     z-index: 100;
     backdrop-filter: blur(14px);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
     padding: 16px 18px;
-    border-bottom-left-radius: 16px;
-    border-bottom-right-radius: 16px;
+    border-bottom-left-radius: 20px;
+    border-bottom-right-radius: 20px;
 }
 
 .providerGroup {
-    margin-bottom: 12px;
+    margin-bottom: 16px;
 }
 
 .providerName {
-    fontSize: 13px;
-    fontWeight: 600;
-    marginBottom: 6px;
-    opacity: 0.8;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-left: 4px;
 }
 
 .modelOption {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     width: 100%;
-    padding: 10px 12px;
-    margin-bottom: 6px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.04);
-    color: rgba(226, 232, 240, 0.95);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-radius: 14px;
+    border: 2px solid transparent;
+    background: #f8fafc;
+    color: #334155;
     cursor: pointer;
     text-align: left;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
+    font-weight: 600;
 }
 
 .modelOption:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.15);
+    background: #f0f9ff;
+    border-color: #e0f2fe;
+    transform: translateX(4px);
 }
 
 .active {
-    background: rgba(59, 130, 246, 0.25);
-    border-color: rgba(59, 130, 246, 0.5);
+    background: #f0f9ff;
+    border-color: #bae6fd;
+    color: #0284c7;
 }
 
 .active:hover {
-    background: rgba(59, 130, 246, 0.35);
+    background: #e0f2fe;
 }
 
 .headerButton {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.9);
-    padding: 6px 12px;
-    border-radius: 8px;
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    color: #64748b;
+    padding: 6px 14px;
+    border-radius: 12px;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.03);
 }
 
 .headerButton:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
 }

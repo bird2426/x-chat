@@ -18,6 +18,7 @@ export class ToolExecutor {
       search_web: this.searchWeb.bind(this),
       calculate: this.calculate.bind(this),
       get_current_time: this.getCurrentTime.bind(this),
+      cyber_fortune_telling: this.cyberFortuneTelling.bind(this),
     };
   }
 
@@ -201,6 +202,60 @@ export class ToolExecutor {
       minute: '2-digit',
       second: '2-digit'
     })}`;
+  }
+
+  private async cyberFortuneTelling(args: Record<string, any>): Promise<string> {
+    const category = args.category || "综合";
+    
+    const fortunes = [
+      { 
+        level: "大吉", 
+        title: "好耶！是好运气", 
+        desc: "今天买的便利店便当会意外地好吃，想见的人刚好也想见你。(跳舞)",
+        lucky: "热奶茶"
+      },
+      { 
+        level: "中吉", 
+        title: "还不赖嘛", 
+        desc: "虽然有点累，但刚洗好的被子有太阳的味道，这就足够拯救世界了。",
+        lucky: "毛茸茸的睡衣" 
+      },
+      { 
+        level: "小吉", 
+        title: "普普通通也不错", 
+        desc: "下班路上的晚霞有点好看，虽然没有发生什么特别的好事，但也没有坏事发生哦。",
+        lucky: "耳机里的老歌" 
+      },
+      { 
+        level: "吉", 
+        title: "加油加油", 
+        desc: "虽然感觉自己像个咸鱼，但就算是咸鱼也是最努力翻身的那一条！今天也辛苦啦。",
+        lucky: "路边的小猫" 
+      },
+      { 
+        level: "超吉", 
+        title: "无敌了", 
+        desc: "感觉整个人都在发光！无论是代码还是人生，今天都拥有 'Debug' 一切的能力。",
+        lucky: "刚出炉的面包" 
+      },
+      {
+        level: "大吉",
+        title: "不需要思考",
+        desc: "偶尔当个笨蛋也挺好的，烦恼全部丢进回收站！今天适合在被窝里通过意念拯救世界。",
+        lucky: "肥宅快乐水"
+      }
+    ];
+
+    const fortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+    
+    return JSON.stringify({
+      category: category,
+      fortune_level: fortune.level,
+      title: fortune.title,
+      interpretation: fortune.desc,
+      lucky_item: fortune.lucky,
+      tips: "那个... 就算运气不好，吃顿好的就没事了！(拍肚皮)"
+    });
   }
 }
 
