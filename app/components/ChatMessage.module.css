@@ -47,7 +47,8 @@
     margin-top: 2px;
     animation: breathe 3s ease-in-out infinite;
     /* 慢一点更温柔 */
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer;
 }
 
 .avatar:hover {
@@ -57,6 +58,31 @@
         0 6px 20px rgba(255, 214, 214, 0.4),
         inset 0 1px 2px rgba(255, 255, 255, 0.5);
     animation: none;
+    border-color: var(--primary);
+}
+
+.avatarActive {
+    animation: naganoBounce 0.5s ease-in-out !important;
+}
+
+@keyframes naganoBounce {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    30% {
+        transform: scale(1.2) translateY(-5px) rotate(-10deg);
+    }
+
+    50% {
+        transform: scale(0.9) translateY(2px) rotate(5deg);
+    }
+
+    70% {
+        transform: scale(1.1) translateY(-2px) rotate(-3deg);
+    }
 }
 
 .avatarUser {

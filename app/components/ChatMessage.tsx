@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import styles from './ChatMessage.module.css';
 import { Message, ToolCall } from '@/app/types';
@@ -6,16 +7,29 @@ interface ChatMessageProps {
     message: Message;
     onQuickSwitch?: (provider: string, model: string) => void;
     onManualSwitch?: () => void;
+    onAvatarClick?: () => void;
 }
 
-export function ChatMessage({ message, onQuickSwitch, onManualSwitch }: ChatMessageProps) {
+export function ChatMessage({ message, onQuickSwitch, onManualSwitch, onAvatarClick }: ChatMessageProps) {
     const isUser = message.role === 'user';
+    const [isAnimating, setIsAnimating] = React.useState(false);
+
+    const handleAvatarClick = () => {
+        if (isUser || !onAvatarClick) return;
+        setIsAnimating(true);
+        onAvatarClick();
+        setTimeout(() => setIsAnimating(false), 500);
+    };
 
     return (
         <div className={`${styles.row} ${isUser ? styles.rowUser : styles.rowBot}`}>
             {/* AI Avatar (Left) - 自嘲熊 Nagano */}
             {!isUser && (
-                <div className={styles.avatar}>
+                <div
+                    className={`${styles.avatar} ${isAnimating ? styles.avatarActive : ''}`}
+                    onClick={handleAvatarClick}
+                    title="点点我捏~"
+                >
                     <img
                         src="/images/nagano.png"
                         alt="自嘲熊 Nagano Bear"

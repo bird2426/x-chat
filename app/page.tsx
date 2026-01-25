@@ -14,10 +14,23 @@ const STORAGE_PROVIDER_KEY = 'x-chat-provider';
 const STORAGE_MODEL_KEY = 'x-chat-model';
 const HISTORY_LIMIT = 60;
 
+const NAGANO_QUOTES = [
+  "哎呀真拿你没办法捏~ (扭动) 🍙",
+  "唔... 肚子饿了，想吃糯米团子... 🍚",
+  "人生就是... 稍微自嘲一下然后继续前进捏 ✨",
+  "脑子空空，只剩下可爱了... 🍐",
+  "你是在拍我吗？(害羞) 🐻",
+  "虽然很累，但是为了你... 熊熊可以再坚持一下！💦",
+  "唔... 这种感觉... 是要长草了吗？🌿",
+  "只要能吃饱睡好，就是最幸福的小熊啦~ 💤",
+  "哎嘿~ 刚才是在想我吗？(搓手手)",
+  "唔唔唔... 这种问题熊熊要思考很久捏... 🍵"
+];
+
 export default function Home() {
   // --- 状态管理 ---
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'bot', content: '你好！我是你的 AI 助手，很高兴为你服务。' }
+    { role: 'bot', content: '嗨！我是熊熊（自嘲熊）捏~ 🍙 请问有什么我可以帮你的吗？虽然我很懒，但如果是陪你聊天的话... 唔，我会努力不睡着的！💤 ✨' }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -47,6 +60,12 @@ export default function Home() {
   // 滚动到底部
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // 自嘲熊点击互动
+  const handleNaganoClick = () => {
+    const randomQuote = NAGANO_QUOTES[Math.floor(Math.random() * NAGANO_QUOTES.length)];
+    showToastNotification(randomQuote);
   };
 
   // 格式化错误信息（针对前端显示的兜底逻辑）
@@ -258,12 +277,23 @@ export default function Home() {
               message={msg}
               onQuickSwitch={(p, m) => handleModelChange(p, m)}
               onManualSwitch={() => setShowModelSelector(true)}
+              onAvatarClick={handleNaganoClick}
             />
           ))}
 
           {isLoading && (
             <div className={`${styles.row} ${styles.rowBot}`}>
-              <div className={styles.avatar}>AI</div>
+              <div
+                className={styles.avatar}
+                onClick={handleNaganoClick}
+                title="点点我捏~"
+              >
+                <img
+                  src="/images/nagano.png"
+                  alt="Nagano Bear"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                />
+              </div>
               <div className={`${styles.bubble} ${styles.bubbleBot} ${styles.typing}`}>
                 <span className={styles.dot} />
                 <span className={styles.dot} />

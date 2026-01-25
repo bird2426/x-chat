@@ -86,8 +86,8 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
                         ) : (
                             <img src={media.preview} className={styles.previewMedia} alt="preview" />
                         )}
+                        <button className={styles.previewRemove} onClick={clearMedia} aria-label="Remove media">×</button>
                     </div>
-                    <button className={styles.previewRemove} onClick={clearMedia} aria-label="Remove media">×</button>
                 </div>
             )}
 
