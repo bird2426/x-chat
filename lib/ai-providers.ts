@@ -31,43 +31,56 @@ export const AI_PROVIDERS: AIProvider[] = [
   },
   {
     id: "qwen",
-    name: "通义千问 (Qwen)",
+    name: "Qwen",
     requiresApiKey: true,
     models: [
       {
-        id: "qwen-flash",
-        name: "Qwen Flash (文本)",
+        id: "qwen-plus-2025-12-01",
+        name: "qwen-plus-2025-12-01",
         supportsVision: false,
         supportsVideo: false,
       },
-      {
-        id: "deepseek-v3.2",
-        name: "DeepSeek V3.2 (文本)",
-        supportsVision: false,
-        supportsVideo: false,
-      },
-      // 新增的高级模型
       {
         id: "qwen3-max-preview",
-        name: "Qwen3 Max Preview (文本)",
+        name: "qwen3-max-preview",
         supportsVision: false,
         supportsVideo: false,
       },
       {
-        id: "qwen3-235b-a22b-thinking-2507",
-        name: "Qwen3 235B Thinking (文本)",
+        id: "qwen3-vl-plus-2025-12-19",
+        name: "qwen3-vl-plus-2025-12-19",
+        supportsVision: true,
+        supportsVideo: false,
+      },
+    ],
+  },
+  {
+    id: "deepseek",
+    name: "DeepSeek",
+    requiresApiKey: true,
+    models: [
+      {
+        id: "deepseek-v3.2",
+        name: "deepseek-v3.2",
         supportsVision: false,
         supportsVideo: false,
       },
       {
-        id: "qwen-plus-2025-12-01",
-        name: "Qwen Plus 12.01 (文本)",
+        id: "deepseek-v3.1",
+        name: "deepseek-v3.1",
         supportsVision: false,
         supportsVideo: false,
       },
+    ],
+  },
+  {
+    id: "kimi",
+    name: "Kimi",
+    requiresApiKey: true,
+    models: [
       {
-        id: "qwen-plus-2025-07-28",
-        name: "Qwen Plus 07.28 (文本)",
+        id: "kimi-k2-thinking",
+        name: "kimi-k2-thinking",
         supportsVision: false,
         supportsVideo: false,
       },
@@ -108,13 +121,13 @@ export async function callGoogleAPI(
 
   const genAI = new GoogleGenerativeAI(apiKey);
   // Google Gemini 支持直接通过 systemInstruction 设置系统提示词
-  const genModel = genAI.getGenerativeModel({ 
+  const genModel = genAI.getGenerativeModel({
     model,
-    systemInstruction: systemPrompt 
+    systemInstruction: systemPrompt
   });
 
   const promptParts: any[] = [];
-  
+
   // ... (其余代码保持不变)
 
   if (media?.data) {

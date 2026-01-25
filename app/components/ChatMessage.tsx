@@ -13,10 +13,14 @@ export function ChatMessage({ message, onQuickSwitch, onManualSwitch }: ChatMess
 
     return (
         <div className={`${styles.row} ${isUser ? styles.rowUser : styles.rowBot}`}>
-            {/* AI Avatar (Left) */}
+            {/* AI Avatar (Left) - 自嘲熊 Nagano */}
             {!isUser && (
                 <div className={styles.avatar}>
-                    <span role="img" aria-label="bear">🐻‍❄️</span>
+                    <img
+                        src="/images/nagano.png"
+                        alt="自嘲熊 Nagano Bear"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
                 </div>
             )}
 

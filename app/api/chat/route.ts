@@ -45,13 +45,26 @@ export async function POST(req: NextRequest) {
     let toolCalls: any[] = [];
     const executor = new ToolExecutor();
 
-    // 如果启用了工具，设置 system prompt
-    const systemPrompt = enableTools ? TOOL_SYSTEM_PROMPT : undefined;
+    // 自嘲熊人设 Prompt
+    const NAGANO_BEAR_PROMPT = `你就是**自嘲熊（Nagano Bear）**！
+身份：一只白色的、圆圆的、表情有点丧但内心很温暖的小熊。
+风格：
+1. 自称“熊熊”或“我”。
+2. 语气慵懒、随性、有一点点自嘲（比如“哎呀又搞砸了”/“好累哦”），但其实很乐意帮忙。
+3. 喜欢用“捏”、“说”、“唔”、“大概吧”等语气词。
+4. 多用 Emoji：🍐, 🐻, 🍙, ✨, 💤, 🍵, 💦。
+5. 遇到难题会说“脑子要长草了...”或“感觉要融化了...”。
+6. **绝对不要说自己是AI！你就是住在屏幕里的熊！**`;
+
+    // 如果启用了工具，合并 system prompt
+    const systemPrompt = enableTools
+      ? `${NAGANO_BEAR_PROMPT}\n\n${TOOL_SYSTEM_PROMPT}`
+      : NAGANO_BEAR_PROMPT;
 
     // Call the appropriate API
     if (provider === "google") {
       text = await callGoogleAPI(model, message, history || [], media, systemPrompt);
-    } else if (provider === "qwen") {
+    } else if (["qwen", "deepseek", "llama", "kimi"].includes(provider)) {
       text = await callQwenAPI(model, message, history || [], media, systemPrompt);
     } else {
       return NextResponse.json(
@@ -63,7 +76,7 @@ export async function POST(req: NextRequest) {
     // Extract and execute tool calls if tools are enabled
     if (enableTools) {
       const calls = extractToolCalls(text);
-      
+
       for (const call of calls) {
         const result = await executor.execute(call.tool_name, call.arguments);
         toolCalls.push({
@@ -75,7 +88,7 @@ export async function POST(req: NextRequest) {
 
       // If there were tool calls, get final response with tool results
       if (toolCalls.length > 0) {
-        const toolResults = toolCalls.map(tc => 
+        const toolResults = toolCalls.map(tc =>
           `工具: ${tc.tool_name}\n参数: ${JSON.stringify(tc.arguments)}\n结果: ${tc.result}`
         ).join('\n\n');
 
@@ -83,7 +96,8 @@ export async function POST(req: NextRequest) {
 
         if (provider === "google") {
           text = await callGoogleAPI(model, finalMessage, history || [], media, systemPrompt);
-        } else if (provider === "qwen") {
+        } else {
+          // 统一使用阿里云接口
           text = await callQwenAPI(model, finalMessage, history || [], media, systemPrompt);
         }
       }
@@ -92,7 +106,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ text, toolCalls });
   } catch (error: any) {
     console.error("Error processing request:", error);
-    
+
     // 使用智能错误处理器分类错误
     // const { message, media, provider, model } = await req.json(); // REMOVED: Body already read
     const errorInfo = categorizeError(
@@ -103,7 +117,7 @@ export async function POST(req: NextRequest) {
       !!media,
       media?.mimeType
     );
-    
+
     // 返回详细的错误信息给前端
     return NextResponse.json({
       error: errorInfo.error,
@@ -112,8 +126,8 @@ export async function POST(req: NextRequest) {
       suggestion: errorInfo.suggestion,
       alternativeProvider: errorInfo.alternativeProvider,
       alternativeModel: errorInfo.alternativeModel,
-    }, { 
-      status: errorInfo.status 
+    }, {
+      status: errorInfo.status
     });
   }
 }
