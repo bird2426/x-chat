@@ -3,18 +3,45 @@ import { callGoogleAPI, callQwenAPI, getModel } from "@/lib/ai-providers";
 import { ToolExecutor, extractToolCalls } from "@/lib/tool-executor";
 import { TOOL_SYSTEM_PROMPT } from "@/lib/tools";
 import { categorizeError } from "@/lib/error-handler";
+import { randomUUID } from "crypto";
+import {
+  isTranscriptLoggingEnabled,
+  logEvent,
+  sanitizeForLog,
+  sanitizeTextForLog,
+} from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+
   let body;
   try {
     body = await req.json();
-  } catch (error) {
+  } catch {
+    logEvent("warn", "chat.invalid_json", {
+      requestId,
+      latencyMs: Date.now() - startedAt,
+    });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   const { message, media, history, provider, model, enableTools = false } = body;
 
   try {
+    const transcriptEnabled = isTranscriptLoggingEnabled();
+    logEvent("info", "chat.request", {
+      requestId,
+      provider,
+      model,
+      enableTools,
+      hasMedia: !!(media && media.data),
+      mediaMimeType: media?.mimeType,
+      mediaBytesApprox: typeof media?.data === "string" ? media.data.length : undefined,
+      message: transcriptEnabled ? sanitizeTextForLog(message) : undefined,
+      history: transcriptEnabled ? sanitizeForLog(history) : undefined,
+    });
+
     // Validate provider and model
     const modelInfo = getModel(provider, model);
     if (!modelInfo) {
@@ -42,7 +69,11 @@ export async function POST(req: NextRequest) {
     }
 
     let text: string;
-    let toolCalls: any[] = [];
+    const toolCalls: Array<{
+      tool_name: string;
+      arguments: Record<string, unknown>;
+      result: string;
+    }> = [];
     const executor = new ToolExecutor();
 
     // 自嘲熊人设 Prompt
@@ -84,6 +115,13 @@ export async function POST(req: NextRequest) {
           arguments: call.arguments,
           result
         });
+
+        logEvent("info", "chat.tool_call", {
+          requestId,
+          tool_name: call.tool_name,
+          arguments: transcriptEnabled ? sanitizeForLog(call.arguments) : undefined,
+          result: transcriptEnabled ? sanitizeTextForLog(result) : undefined,
+        });
       }
 
       // If there were tool calls, get final response with tool results
@@ -103,9 +141,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    logEvent("info", "chat.response", {
+      requestId,
+      provider,
+      model,
+      enableTools,
+      latencyMs: Date.now() - startedAt,
+      text: transcriptEnabled ? sanitizeTextForLog(text) : undefined,
+      toolCalls: transcriptEnabled ? sanitizeForLog(toolCalls) : undefined,
+    });
+
     return NextResponse.json({ text, toolCalls });
-  } catch (error: any) {
-    console.error("Error processing request:", error);
+  } catch (error: unknown) {
+    const errorName = error instanceof Error ? error.name : undefined;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    logEvent("error", "chat.error", {
+      requestId,
+      provider,
+      model,
+      enableTools,
+      latencyMs: Date.now() - startedAt,
+      errorName,
+      errorMessage: sanitizeTextForLog(errorMessage),
+      errorStack: sanitizeTextForLog(errorStack || ""),
+      message: isTranscriptLoggingEnabled() ? sanitizeTextForLog(message) : undefined,
+      history: isTranscriptLoggingEnabled() ? sanitizeForLog(history) : undefined,
+    });
 
     // 使用智能错误处理器分类错误
     // const { message, media, provider, model } = await req.json(); // REMOVED: Body already read
