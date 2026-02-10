@@ -42,21 +42,44 @@ export class ToolExecutor {
     }
 
     try {
+      const timeoutMs = 10_000;
+      const fetchJson = async (url: string) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, { signal: controller.signal });
+          const text = await res.text();
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+          }
+          return JSON.parse(text);
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+
       // 1. 地理编码：将城市名转换为经纬度 (使用 Open-Meteo Geocoding API)
       const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=zh&format=json`;
-      const geoRes = await fetch(geoUrl);
-      const geoData = await geoRes.json();
+      const geoData = await fetchJson(geoUrl);
 
-      if (!geoData.results || geoData.results.length === 0) {
+      if (!geoData?.results || geoData.results.length === 0) {
         return JSON.stringify({ error: `未找到城市: ${city}` });
       }
 
-      const { latitude, longitude, name } = geoData.results[0];
+      const { latitude, longitude, name } = geoData.results[0] || {};
+      if (typeof latitude !== "number" || typeof longitude !== "number") {
+        return JSON.stringify({ error: `城市坐标无效: ${city}` });
+      }
 
       // 2. 获取天气数据 (使用 Open-Meteo Forecast API)
       const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`;
-      const weatherRes = await fetch(weatherUrl);
-      const weatherData = await weatherRes.json();
+      const weatherData = await fetchJson(weatherUrl);
+
+      const currentRaw = weatherData?.current;
+      const dailyRaw = weatherData?.daily;
+      if (!currentRaw || !dailyRaw || !Array.isArray(dailyRaw.time)) {
+        return JSON.stringify({ error: "天气数据格式异常，请稍后再试" });
+      }
 
       // WMO 天气代码映射
       const getWeatherIcon = (code: number) => {
@@ -82,15 +105,27 @@ export class ToolExecutor {
       };
 
       // 构造当前天气
+      const temp = Number(currentRaw.temperature_2m);
+      const humidity = Number(currentRaw.relative_humidity_2m);
+      const weatherCode = Number(currentRaw.weather_code);
+      if (!Number.isFinite(temp) || !Number.isFinite(humidity) || !Number.isFinite(weatherCode)) {
+        return JSON.stringify({ error: "天气数据缺失，请稍后再试" });
+      }
+
       const current = {
-        temp: Math.round(weatherData.current.temperature_2m),
-        condition: getWeatherDesc(weatherData.current.weather_code),
-        humidity: weatherData.current.relative_humidity_2m,
-        icon: getWeatherIcon(weatherData.current.weather_code)
+        temp: Math.round(temp),
+        condition: getWeatherDesc(weatherCode),
+        humidity: Math.round(humidity),
+        icon: getWeatherIcon(weatherCode)
       };
 
       // 构造未来7天预报
-      const forecast = weatherData.daily.time.map((time: string, index: number) => {
+      const times: string[] = dailyRaw.time;
+      const codes: number[] = dailyRaw.weather_code || [];
+      const maxTemps: number[] = dailyRaw.temperature_2m_max || [];
+      const minTemps: number[] = dailyRaw.temperature_2m_min || [];
+
+      const forecast = times.map((time: string, index: number) => {
         const date = new Date(time);
         const todayStr = new Date().toISOString().split('T')[0];
         let dateLabel = `${date.getMonth() + 1}/${date.getDate()}`;
@@ -103,13 +138,18 @@ export class ToolExecutor {
         const tomorrowStr = tomorrow.toISOString().split('T')[0];
         if (time === tomorrowStr) dateLabel = "明天";
 
+        const code = Number(codes[index]);
+        const maxT = Number(maxTemps[index]);
+        const minT = Number(minTemps[index]);
+        const safeCode = Number.isFinite(code) ? code : weatherCode;
+
         return {
           date: dateLabel,
-          temp: Math.round((weatherData.daily.temperature_2m_max[index] + weatherData.daily.temperature_2m_min[index]) / 2), // 平均温
-          condition: getWeatherDesc(weatherData.daily.weather_code[index]),
-          icon: getWeatherIcon(weatherData.daily.weather_code[index]),
-          min_temp: Math.round(weatherData.daily.temperature_2m_min[index]),
-          max_temp: Math.round(weatherData.daily.temperature_2m_max[index])
+          temp: Number.isFinite(maxT) && Number.isFinite(minT) ? Math.round((maxT + minT) / 2) : Math.round(temp),
+          condition: getWeatherDesc(safeCode),
+          icon: getWeatherIcon(safeCode),
+          min_temp: Number.isFinite(minT) ? Math.round(minT) : Math.round(temp),
+          max_temp: Number.isFinite(maxT) ? Math.round(maxT) : Math.round(temp)
         };
       });
 
