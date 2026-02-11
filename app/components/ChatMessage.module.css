@@ -361,6 +361,145 @@
     font-weight: 600;
 }
 
-.manualSwitchButton:hover {
-    background: #e2e8f0;
+
+.travelCard {
+    background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+    border: none;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.travelHeader {
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.4);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.travelTitle {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0369a1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.travelBadge {
+    background: #0ea5e9;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.travelBody {
+    padding: 20px;
+}
+
+.travelHighlights {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.highlightTag {
+    background: rgba(255, 255, 255, 0.6);
+    color: #0284c7;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.travelTimeline {
+    position: relative;
+    padding-left: 16px;
+    border-left: 2px dashed rgba(3, 105, 161, 0.2);
+    margin-left: 8px;
+}
+
+.travelDay {
+    margin-bottom: 24px;
+    position: relative;
+}
+
+.dayHeader {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0c4a6e;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dayHeader::before {
+    content: '';
+    position: absolute;
+    left: -21px;
+    width: 12px;
+    height: 12px;
+    background: #0ea5e9;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 0 2px #bae6fd;
+}
+
+.activityItem {
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 12px;
+}
+
+.activityTime {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0369a1;
+    min-width: 40px;
+    padding-top: 2px;
+}
+
+.activityContent {
+    flex: 1;
+}
+
+.activityName {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0c4a6e;
+    margin-bottom: 2px;
+}
+
+.activityDesc {
+    font-size: 12px;
+    color: #334155;
+    line-height: 1.4;
+}
+
+.activityCost {
+    font-size: 12px;
+    color: #059669;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+.travelFooter {
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.3);
+    border-top: 1px solid rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    color: #0369a1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }

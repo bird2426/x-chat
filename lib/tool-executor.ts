@@ -3,6 +3,7 @@
  */
 
 import { TavilyClient } from 'tavily';
+import { callQwenAPI } from './ai-providers';
 
 export interface ToolCall {
   tool_name: string;
@@ -19,6 +20,7 @@ export class ToolExecutor {
       calculate: this.calculate.bind(this),
       get_current_time: this.getCurrentTime.bind(this),
       cyber_fortune_telling: this.cyberFortuneTelling.bind(this),
+      plan_trip: this.planTrip.bind(this),
     };
   }
 
@@ -296,6 +298,66 @@ export class ToolExecutor {
       lucky_item: fortune.lucky,
       tips: "那个... 就算运气不好，吃顿好的就没事了！(拍肚皮)"
     });
+  }
+
+  private async planTrip(args: Record<string, any>): Promise<string> {
+    const { destination, days = 3, budget_level = "舒适", preferences = "默认" } = args;
+
+    if (!destination) {
+      return JSON.stringify({ error: "缺少目的地参数" });
+    }
+
+    const prompt = `你是一个专业的旅行规划师。请为用户生成一个去${destination}的旅行计划。
+    
+    **参数**：
+    - 天数：${days}天
+    - 预算：${budget_level}
+    - 偏好：${preferences}
+    
+    **必须生成的 JSON 格式**（不要包含 markdown 代码块标记，只返回纯 JSON 字符串）：
+    {
+      "destination": "${destination}",
+      "duration": "${days}天",
+      "total_budget": "估算总价（人民币）",
+      "highlights": ["亮点1", "亮点2"],
+      "daily_itinerary": [
+        {
+          "day": 1,
+          "theme": "第一天的主题",
+          "activities": [
+            { "time": "上午", "activity": "景点名称", "desc": "简短描述", "cost": "门票价格" },
+            { "time": "下午", "activity": "景点名称", "desc": "简短描述", "cost": "门票价格" },
+            { "time": "晚上", "activity": "活动或晚餐", "desc": "推荐餐厅或活动", "cost": "预估费用" }
+          ]
+        }
+      ],
+      "tips": "旅行小贴士"
+    }
+    
+    请确保内容真实合理，特别是景点和路线安排。`;
+
+    try {
+      const planJson = await callQwenAPI(
+        "qwen-plus-2025-12-01",
+        prompt,
+        [],
+        undefined,
+        "你是一个只输出 JSON 的 API 接口。不要输出任何解释性文字。"
+      );
+
+      const cleanJson = planJson.replace(/```json/g, '').replace(/```/g, '').trim();
+      
+      JSON.parse(cleanJson);
+      
+      return cleanJson;
+    } catch (error) {
+      console.error("Plan Trip Error:", error);
+      return JSON.stringify({
+        error: "生成旅行计划失败，但我收到请求了。",
+        destination,
+        days
+      });
+    }
   }
 }
 

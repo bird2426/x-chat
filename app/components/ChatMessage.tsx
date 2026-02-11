@@ -169,5 +169,52 @@ function ToolResult({ toolCall }: { toolCall: ToolCall }) {
         );
     }
 
+    if (toolName === 'plan_trip' && data.daily_itinerary) {
+        return (
+            <div className={`${styles.toolCard} ${styles.travelCard}`}>
+                <div className={styles.travelHeader}>
+                    <div className={styles.travelTitle}>
+                        ✈️ {data.destination} {data.duration}
+                    </div>
+                    <div className={styles.travelBadge}>
+                       {data.total_budget}
+                    </div>
+                </div>
+                
+                <div className={styles.travelBody}>
+                    <div className={styles.travelHighlights}>
+                         {data.highlights?.map((h: string, i: number) => (
+                             <span key={i} className={styles.highlightTag}>✨ {h}</span>
+                         ))}
+                    </div>
+
+                    <div className={styles.travelTimeline}>
+                        {data.daily_itinerary.map((day: any, i: number) => (
+                            <div key={i} className={styles.travelDay}>
+                                <div className={styles.dayHeader}>
+                                    Day {day.day}: {day.theme}
+                                </div>
+                                {day.activities.map((act: any, j: number) => (
+                                    <div key={j} className={styles.activityItem}>
+                                        <div className={styles.activityTime}>{act.time}</div>
+                                        <div className={styles.activityContent}>
+                                            <div className={styles.activityName}>{act.activity}</div>
+                                            <div className={styles.activityDesc}>{act.desc}</div>
+                                            {act.cost && <div className={styles.activityCost}>💰 {act.cost}</div>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className={styles.travelFooter}>
+                    💡 {data.tips || "祝你旅途愉快！"}
+                </div>
+            </div>
+        );
+    }
+
     return null;
 }

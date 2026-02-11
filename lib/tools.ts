@@ -91,6 +91,32 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
       },
       required: []
     }
+  },
+  {
+    "name": "plan_trip",
+    "description": "生成详细的旅行计划，包含每日行程、景点、美食、预算和地图坐标",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "destination": {
+          "type": "string",
+          "description": "目的地城市，例如：京都、巴黎、三亚"
+        },
+        "days": {
+          "type": "number",
+          "description": "旅行天数，默认为3天"
+        },
+        "budget_level": {
+          "type": "string",
+          "description": "预算等级：穷游、舒适、豪华"
+        },
+        "preferences": {
+          "type": "string",
+          "description": "旅行偏好，例如：喜欢古迹、美食之旅、休闲度假"
+        }
+      },
+      "required": ["destination"]
+    }
   }
 ];
 
@@ -110,9 +136,13 @@ ${AVAILABLE_TOOLS.map(tool => `
 `).join('\n')}
 
 **核心规则**：
-1. **必须调用工具**：涉及天气、时间、计算、搜索、算命的问题，必须调用相应工具。
+1. **必须调用工具**：涉及天气、时间、计算、搜索、算命、旅行规划的问题，必须调用相应工具。
 2. **严禁拒绝**：不要说"我无法获取"，要试着去查查看。
 3. **JSON格式**：调用工具时，仅返回标准的 JSON 格式，不要包裹在 Markdown 代码块中，也不要加任何解释文字。
+
+**旅行助手特别说明**：
+- 当用户询问"去哪里玩"、"做个攻略"、"行程安排"时，请调用 \`plan_trip\` 工具。
+- 如果用户没有指定天数，默认按 3 天计算。
 
 **标准调用示例**：
 
@@ -122,11 +152,14 @@ ${AVAILABLE_TOOLS.map(tool => `
   "arguments": { "format": "default" }
 }
 
-用户: "帮我算算今天的运势"
+用户: "帮我做个去京都的3天旅行攻略，要省钱一点"
 {
-  "tool_name": "cyber_fortune_telling",
+  "tool_name": "plan_trip",
   "arguments": {
-    "category": "综合"
+    "destination": "京都",
+    "days": 3,
+    "budget_level": "穷游",
+    "preferences": "默认"
   }
 }
 `;
