@@ -90,22 +90,22 @@ function isModelCapability(error: string): boolean {
 // ============ 错误处理函数 ============
 
 function handleApiKeyMissing(provider: string, error: string): ErrorInfo {
-  const providerName = provider === 'google' ? 'Google Gemini' : '通义千问';
-  const envVarName = provider === 'google' ? 'GOOGLE_API_KEY' : 'QWEN_API_KEY';
-  
+  const providerName = provider === 'bailian' ? '阿里云百炼' : provider;
+  const envVarName = 'BAILIAN_API_KEY';
+
   return {
     error,
     type: ErrorType.API_KEY_MISSING,
     userMessage: `${providerName} API Key 未配置`,
     suggestion: `请在项目根目录创建 .env.local 文件，添加：\n${envVarName}=your_api_key_here`,
-    alternativeProvider: provider === 'google' ? 'qwen' : 'google',
-    alternativeModel: provider === 'google' ? 'qwen-flash' : 'gemini-2.5-flash',
+    alternativeProvider: 'bailian',
+    alternativeModel: 'qwen3.6-plus',
     status: 401
   };
 }
 
 function handleQuotaExceeded(
-  provider: string, 
+  provider: string,
   model: string,
   message?: string,
   hasMedia?: boolean,
@@ -114,14 +114,14 @@ function handleQuotaExceeded(
 ): ErrorInfo {
   // 获取推荐的备用模型
   const alternative = getAlternativeModel(provider, model, message, hasMedia, mediaType);
-  
-  const modelName = model.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
-  
+
+  const modelName = model;
+
   return {
     error: error || 'Quota exceeded',
     type: ErrorType.QUOTA_EXCEEDED,
     userMessage: `${modelName} 配额已用完`,
-    suggestion: `建议切换到免费的 ${alternative.modelDisplayName} 模型继续使用`,
+    suggestion: `建议切换到 ${alternative.modelDisplayName} 模型继续使用`,
     alternativeProvider: alternative.provider,
     alternativeModel: alternative.model,
     status: 429
@@ -134,8 +134,8 @@ function handleRateLimit(provider: string, model: string, error: string): ErrorI
     type: ErrorType.RATE_LIMIT,
     userMessage: '请求过于频繁',
     suggestion: '请稍等片刻后再试，或切换到其他模型',
-    alternativeProvider: provider === 'google' ? 'qwen' : 'google',
-    alternativeModel: provider === 'google' ? 'qwen-flash' : 'gemini-2.5-flash',
+    alternativeProvider: 'bailian',
+    alternativeModel: 'qwen3.5-plus',
     status: 429
   };
 }
@@ -156,8 +156,8 @@ function handleModelCapability(provider: string, error: string): ErrorInfo {
     type: ErrorType.MODEL_CAPABILITY,
     userMessage: error.includes('video') ? '该模型不支持视频' : '该模型不支持此功能',
     suggestion: '请选择支持该功能的模型',
-    alternativeProvider: 'google',
-    alternativeModel: 'gemini-2.5-flash',
+    alternativeProvider: 'bailian',
+    alternativeModel: error.includes('video') ? 'qwen3.6-plus' : 'qwen3.6-plus',
     status: 400
   };
 }
@@ -190,74 +190,47 @@ function getAlternativeModel(
   hasMedia?: boolean,
   mediaType?: string
 ): AlternativeModel {
-  // 如果有视频，只能用 Google Gemini
+  // 当前可用模型不支持视频，推荐最通用的视觉模型，让前端继续阻止视频上传。
   if (mediaType?.startsWith('video')) {
     return {
-      provider: 'google',
-      model: 'gemini-2.5-flash',
-      modelDisplayName: 'Gemini 2.5 Flash'
+      provider: 'bailian',
+      model: 'qwen3.6-plus',
+      modelDisplayName: 'Qwen3.6-Plus'
     };
   }
-  
+
   // 如果有图片
   if (hasMedia && mediaType?.startsWith('image')) {
-    if (currentProvider === 'google') {
-      return {
-        provider: 'qwen',
-        model: 'qwen-vl-plus',
-        modelDisplayName: 'Qwen VL Plus'
-      };
-    } else {
-      return {
-        provider: 'google',
-        model: 'gemini-2.5-flash',
-        modelDisplayName: 'Gemini 2.5 Flash'
-      };
-    }
+    return {
+      provider: 'bailian',
+      model: 'qwen3.6-plus',
+      modelDisplayName: 'Qwen3.6-Plus'
+    };
   }
-  
+
   // 根据消息内容判断任务类型
   const isCode = isCodeRelated(message);
   const isTranslation = isTranslationRelated(message);
-  
-  // Google 失败 → 推荐 Qwen
-  if (currentProvider === 'google') {
-    if (isCode) {
-      return {
-        provider: 'qwen',
-        model: 'deepseek-v3.2',
-        modelDisplayName: 'DeepSeek V3.2'
-      };
-    } else if (isTranslation) {
-      return {
-        provider: 'qwen',
-        model: 'qwen-mt-flash',
-        modelDisplayName: 'Qwen MT Flash'
-      };
-    } else {
-      return {
-        provider: 'qwen',
-        model: 'qwen-flash',
-        modelDisplayName: 'Qwen Flash'
-      };
-    }
-  }
-  
-  // Qwen 失败 → 推荐 Google
-  if (currentProvider === 'qwen') {
+
+  if (isCode) {
     return {
-      provider: 'google',
-      model: 'gemini-2.5-flash',
-      modelDisplayName: 'Gemini 2.5 Flash'
+      provider: 'bailian',
+      model: 'qwen3-coder-plus',
+      modelDisplayName: 'Qwen3-Coder-Plus'
+    };
+  } else if (isTranslation) {
+    return {
+      provider: 'bailian',
+      model: 'qwen3.6-plus',
+      modelDisplayName: 'Qwen3.6-Plus'
+    };
+  } else {
+    return {
+      provider: 'bailian',
+      model: 'qwen3.5-plus',
+      modelDisplayName: 'Qwen3.5-Plus'
     };
   }
-  
-  // 默认推荐
-  return {
-    provider: 'qwen',
-    model: 'qwen-flash',
-    modelDisplayName: 'Qwen Flash'
-  };
 }
 
 /**
@@ -299,10 +272,8 @@ function isTranslationRelated(message?: string): boolean {
  */
 export function getProviderDisplayName(provider: string): string {
   switch (provider) {
-    case 'google':
-      return 'Google Gemini';
-    case 'qwen':
-      return '通义千问';
+    case 'bailian':
+      return '阿里云百炼';
     default:
       return provider;
   }

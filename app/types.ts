@@ -26,3 +26,13 @@ export interface Message {
   toolCalls?: ToolCall[];
   error?: ErrorInfo;
 }
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  provider: string;
+  model: string;
+  createdAt: number;
+  updatedAt: number;
+}

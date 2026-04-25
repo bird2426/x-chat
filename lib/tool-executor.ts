@@ -3,11 +3,128 @@
  */
 
 import { TavilyClient } from 'tavily';
-import { callQwenAPI } from './ai-providers';
+import { callBailianAPI } from './ai-providers';
 
 export interface ToolCall {
   tool_name: string;
   arguments: Record<string, any>;
+}
+
+function evaluateMathExpression(input: string): number {
+  const functions: Record<string, (value: number) => number> = {
+    abs: Math.abs,
+    cos: Math.cos,
+    exp: Math.exp,
+    ln: Math.log,
+    log: Math.log10,
+    sin: Math.sin,
+    sqrt: Math.sqrt,
+    tan: Math.tan,
+  };
+  let index = 0;
+
+  const skipSpaces = () => {
+    while (/\s/.test(input[index] || "")) index += 1;
+  };
+
+  const parseExpression = (): number => {
+    let value = parseTerm();
+    while (true) {
+      skipSpaces();
+      const op = input[index];
+      if (op !== "+" && op !== "-") break;
+      index += 1;
+      const right = parseTerm();
+      value = op === "+" ? value + right : value - right;
+    }
+    return value;
+  };
+
+  const parseTerm = (): number => {
+    let value = parsePower();
+    while (true) {
+      skipSpaces();
+      const op = input[index];
+      if (op !== "*" && op !== "/") break;
+      index += 1;
+      const right = parsePower();
+      value = op === "*" ? value * right : value / right;
+    }
+    return value;
+  };
+
+  const parsePower = (): number => {
+    let value = parseUnary();
+    skipSpaces();
+    if (input[index] === "^") {
+      index += 1;
+      value = Math.pow(value, parsePower());
+    }
+    return value;
+  };
+
+  const parseUnary = (): number => {
+    skipSpaces();
+    if (input[index] === "+") {
+      index += 1;
+      return parseUnary();
+    }
+    if (input[index] === "-") {
+      index += 1;
+      return -parseUnary();
+    }
+    return parsePrimary();
+  };
+
+  const parsePrimary = (): number => {
+    skipSpaces();
+    const char = input[index];
+
+    if (char === "(") {
+      index += 1;
+      const value = parseExpression();
+      skipSpaces();
+      if (input[index] !== ")") throw new Error("缺少右括号");
+      index += 1;
+      return value;
+    }
+
+    if (/[0-9.]/.test(char || "")) {
+      const start = index;
+      while (/[0-9.]/.test(input[index] || "")) index += 1;
+      const value = Number(input.slice(start, index));
+      if (!Number.isFinite(value)) throw new Error("数字格式无效");
+      return value;
+    }
+
+    if (/[A-Za-z_]/.test(char || "")) {
+      const start = index;
+      while (/[A-Za-z_]/.test(input[index] || "")) index += 1;
+      const name = input.slice(start, index).toLowerCase();
+      if (name === "pi") return Math.PI;
+      if (name === "e") return Math.E;
+
+      skipSpaces();
+      if (input[index] !== "(" || !functions[name]) {
+        throw new Error(`不支持的函数或常量: ${name}`);
+      }
+
+      index += 1;
+      const value = parseExpression();
+      skipSpaces();
+      if (input[index] !== ")") throw new Error("缺少右括号");
+      index += 1;
+      return functions[name](value);
+    }
+
+    throw new Error("表达式格式无效");
+  };
+
+  const result = parseExpression();
+  skipSpaces();
+  if (index !== input.length) throw new Error("表达式包含无法解析的内容");
+  if (!Number.isFinite(result)) throw new Error("计算结果无效");
+  return result;
 }
 
 export class ToolExecutor {
@@ -15,6 +132,7 @@ export class ToolExecutor {
 
   constructor() {
     this.tools = {
+      polish_text: this.polishText.bind(this),
       get_weather: this.getWeather.bind(this),
       search_web: this.searchWeb.bind(this),
       calculate: this.calculate.bind(this),
@@ -33,6 +151,71 @@ export class ToolExecutor {
       return await this.tools[toolName](args);
     } catch (error) {
       return `工具执行错误: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  private async polishText(args: Record<string, any>): Promise<string> {
+    const text = args.text || "";
+    const mode = args.mode || "formal";
+    const field = args.field || "通用";
+
+    if (!text) {
+      return JSON.stringify({ error: "缺少文本参数" });
+    }
+
+    const modeDescriptions: Record<string, string> = {
+      formal: "正式化学术风格，提升语言的专业性和严谨性",
+      concise: "精简冗余表达，保留核心信息",
+      expand: "扩充细节和论证，增加学术深度",
+      translate_en: "中译英，保持学术英语风格",
+      translate_zh: "英译中，保持学术中文风格"
+    };
+
+    const modeDesc = modeDescriptions[mode] || modeDescriptions.formal;
+
+    const prompt = `你是一位专业的学术写作助手。请对以下文本进行润色改写。
+
+**原始文本**：
+${text}
+
+**润色要求**：
+- 模式：${modeDesc}
+- 学科领域：${field}
+
+**输出要求**：
+请返回以下 JSON 格式（不要包含 markdown 代码块标记）：
+{
+  "original_text": "${text}",
+  "mode": "${mode}",
+  "field": "${field}",
+  "polished_text": "润色后的文本",
+  "changes": ["修改说明1", "修改说明2"],
+  "key_improvements": "主要改进点总结"
+}`;
+
+    try {
+      const result = await callBailianAPI(
+        "qwen3-max-2026-01-23",
+        prompt,
+        [],
+        undefined,
+        "你是一个专业的学术写作助手，专注于学术论文的语言润色和改写。"
+      );
+
+      const cleanJson = result.replace(/```json/g, '').replace(/```/g, '').trim();
+
+      // 验证 JSON 格式
+      JSON.parse(cleanJson);
+
+      return cleanJson;
+    } catch (error) {
+      console.error("Polish Text Error:", error);
+      return JSON.stringify({
+        error: "润色失败，请稍后重试",
+        original_text: text,
+        mode,
+        field
+      });
     }
   }
 
@@ -220,14 +403,12 @@ export class ToolExecutor {
     }
 
     try {
-      // 简单的安全计算（实际项目应该使用更安全的方法）
-      const allowedChars = /^[0-9+\-*/().\s]+$/;
+      const allowedChars = /^[0-9+\-*/().\sA-Za-z_^]+$/;
       if (!allowedChars.test(expression)) {
         return "错误: 表达式包含不允许的字符";
       }
 
-      // eslint-disable-next-line no-eval
-      const result = eval(expression);
+      const result = evaluateMathExpression(expression);
       return `计算结果: ${expression} = ${result}`;
     } catch (error) {
       return `计算错误: ${error instanceof Error ? error.message : String(error)}`;
@@ -337,8 +518,8 @@ export class ToolExecutor {
     请确保内容真实合理，特别是景点和路线安排。`;
 
     try {
-      const planJson = await callQwenAPI(
-        "qwen-plus-2025-12-01",
+      const planJson = await callBailianAPI(
+        "qwen3.6-plus",
         prompt,
         [],
         undefined,

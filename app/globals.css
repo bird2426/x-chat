@@ -1,23 +1,23 @@
-/* 自嘲熊主题 - 温暖治愈风格 */
+/* 学术助手主题 - 专业严谨风格 */
 :root {
-  --background: #fffef9;
-  /* 奶白色 */
-  --foreground: #5a4a3a;
-  /* 温暖的深褐色 */
+  --background: #ffffff;
+  /* 纯白背景 */
+  --foreground: #1f2937;
+  /* 深灰色文字 */
 
-  --primary: #ffe4b5;
-  /* 温暖的麦色（呼应草帽） */
-  --primary-hover: #ffd27f;
+  --primary: #2563eb;
+  /* 学术蓝 */
+  --primary-hover: #1d4ed8;
 
-  --secondary: #ffd6d6;
-  /* 淡粉色（呼应腮红） */
+  --secondary: #f1f5f9;
+  /* 浅灰色次要背景 */
 
-  --accent: #fff8dc;
-  /* 玉米丝色 */
+  --accent: #eff6ff;
+  /* 淡蓝色强调 */
 
-  --border: rgba(210, 180, 140, 0.15);
-  /* 淡褐色边框 */
-  --shadow: rgba(139, 115, 85, 0.08);
+  --border: rgba(148, 163, 184, 0.2);
+  /* 淡蓝灰色边框 */
+  --shadow: rgba(0, 0, 0, 0.05);
   /* 柔和阴影 */
 }
 
@@ -32,12 +32,8 @@ body {
 
 body {
   color: var(--foreground);
-  background:
-    /* 温暖的光晕效果 */
-    radial-gradient(circle at 20% 30%, rgba(255, 228, 181, 0.2) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(255, 214, 214, 0.2) 0%, transparent 50%),
-    var(--background);
-  font-family: "Nunito", "Quicksand", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   margin: 0;
   padding: 0;
   min-height: 100dvh;
@@ -45,19 +41,18 @@ body {
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--primary);
-  border-radius: 99px;
-  border: 2px solid var(--background);
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--primary-hover);
+  background: #94a3b8;
 }

@@ -1,214 +1,580 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './page.module.css';
 import { AI_PROVIDERS } from '@/lib/ai-providers';
-import { Message, MediaFile } from '@/app/types';
+import { ChatSession, Message, MediaFile, ToolCall } from '@/app/types';
 import { ChatMessage } from '@/app/components/ChatMessage';
 import { ModelSelector } from '@/app/components/ModelSelector';
 import { ChatInput } from '@/app/components/ChatInput';
 import { Toast } from '@/app/components/Toast';
+import { getIndexedSessions, syncIndexedSessions } from '@/app/session-store';
 
-const STORAGE_KEY = 'x-chat-history-v1';
+const LEGACY_STORAGE_KEY = 'x-chat-history-v1';
+const STORAGE_SESSIONS_KEY = 'x-chat-sessions-v2';
+const STORAGE_ACTIVE_SESSION_KEY = 'x-chat-active-session-v2';
 const STORAGE_PROVIDER_KEY = 'x-chat-provider';
 const STORAGE_MODEL_KEY = 'x-chat-model';
-const HISTORY_LIMIT = 60;
+const HISTORY_LIMIT = 80;
+const SESSION_LIMIT = 40;
 
-const NAGANO_QUOTES = [
-  "哎呀真拿你没办法捏~ (扭动) 🍙",
-  "唔... 肚子饿了，想吃糯米团子... 🍚",
-  "人生就是... 稍微自嘲一下然后继续前进捏 ✨",
-  "脑子空空，只剩下可爱了... 🍐",
-  "你是在拍我吗？(害羞) 🐻",
-  "虽然很累，但是为了你... 熊熊可以再坚持一下！💦",
-  "唔... 这种感觉... 是要长草了吗？🌿",
-  "只要能吃饱睡好，就是最幸福的小熊啦~ 💤",
-  "哎嘿~ 刚才是在想我吗？(搓手手)",
-  "唔唔唔... 这种问题熊熊要思考很久捏... 🍵"
-];
+const WELCOME_MESSAGE: Message = {
+  role: 'bot',
+  content: '您好！我是您的学术助手，专注于协助学术研究和论文写作。我可以帮您润色文本、搜索文献、解答学术问题等。请问有什么可以帮您的吗？',
+};
+
+function getDefaultProviderModel() {
+  const provider = AI_PROVIDERS[0];
+  return {
+    provider: provider.id,
+    model: provider.models[0].id,
+  };
+}
+
+function createId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createSession(overrides: Partial<ChatSession> = {}): ChatSession {
+  const now = Date.now();
+  const defaults = getDefaultProviderModel();
+
+  return {
+    id: createId(),
+    title: '新会话',
+    messages: [WELCOME_MESSAGE],
+    provider: defaults.provider,
+    model: defaults.model,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+function normalizeMessage(value: any): Message | null {
+  if (!value || (value.role !== 'user' && value.role !== 'bot')) return null;
+  if (typeof value.content !== 'string') return null;
+
+  const message: Message = {
+    role: value.role,
+    content: value.content,
+  };
+
+  if (Array.isArray(value.toolCalls)) {
+    message.toolCalls = value.toolCalls;
+  }
+  if (value.error && typeof value.error === 'object') {
+    message.error = value.error;
+  }
+
+  return message;
+}
+
+function normalizeSession(value: any): ChatSession | null {
+  if (!value || typeof value !== 'object') return null;
+
+  const messages = Array.isArray(value.messages)
+    ? value.messages.map(normalizeMessage).filter(Boolean) as Message[]
+    : [];
+  if (!messages.length) return null;
+
+  const defaults = getDefaultProviderModel();
+  const provider = AI_PROVIDERS.find((p) => p.id === value.provider) ? value.provider : defaults.provider;
+  const modelList = AI_PROVIDERS.find((p) => p.id === provider)?.models ?? [];
+  const model = modelList.some((m) => m.id === value.model) ? value.model : modelList[0]?.id ?? defaults.model;
+  const now = Date.now();
+
+  return {
+    id: typeof value.id === 'string' ? value.id : createId(),
+    title: typeof value.title === 'string' && value.title.trim() ? value.title.trim() : deriveTitle(messages),
+    messages: messages.slice(-HISTORY_LIMIT),
+    provider,
+    model,
+    createdAt: Number.isFinite(value.createdAt) ? value.createdAt : now,
+    updatedAt: Number.isFinite(value.updatedAt) ? value.updatedAt : now,
+  };
+}
+
+function deriveTitle(messages: Message[]) {
+  const firstUserMessage = messages.find((message) => message.role === 'user' && message.content.trim());
+  if (!firstUserMessage) return '新会话';
+
+  const compact = firstUserMessage.content.replace(/\s+/g, ' ').trim();
+  return compact.length > 24 ? `${compact.slice(0, 24)}...` : compact;
+}
+
+function formatSessionTime(timestamp: number) {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  if (isToday) {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+}
+
+function serializeSessions(sessions: ChatSession[]) {
+  return sessions
+    .slice()
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, SESSION_LIMIT)
+    .map((session) => ({
+      ...session,
+      messages: session.messages.slice(-HISTORY_LIMIT).map(({ role, content, toolCalls, error }) => ({
+        role,
+        content,
+        toolCalls,
+        error,
+      })),
+    }));
+}
+
+function loadLocalStorageSessions() {
+  const savedSessions = localStorage.getItem(STORAGE_SESSIONS_KEY);
+  if (savedSessions) {
+    const parsed = JSON.parse(savedSessions);
+    const sessions = Array.isArray(parsed)
+      ? parsed.map(normalizeSession).filter(Boolean) as ChatSession[]
+      : [];
+    if (sessions.length) {
+      return {
+        sessions,
+        activeSessionId: localStorage.getItem(STORAGE_ACTIVE_SESSION_KEY) || sessions[0].id,
+      };
+    }
+  }
+
+  const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (legacy) {
+    const parsed = JSON.parse(legacy);
+    const messages = Array.isArray(parsed)
+      ? parsed.map(normalizeMessage).filter(Boolean) as Message[]
+      : [];
+    if (messages.length) {
+      const session = createSession({
+        title: deriveTitle(messages),
+        messages: messages.slice(-HISTORY_LIMIT),
+      });
+      return {
+        sessions: [session],
+        activeSessionId: session.id,
+      };
+    }
+  }
+
+  const session = createSession();
+  return {
+    sessions: [session],
+    activeSessionId: session.id,
+  };
+}
+
+async function loadStoredSessions() {
+  const indexedSessions = (await getIndexedSessions())
+    .map(normalizeSession)
+    .filter(Boolean) as ChatSession[];
+
+  if (indexedSessions.length) {
+    return {
+      sessions: indexedSessions,
+      activeSessionId: localStorage.getItem(STORAGE_ACTIVE_SESSION_KEY) || indexedSessions[0].id,
+    };
+  }
+
+  const localSessions = loadLocalStorageSessions();
+  await syncIndexedSessions(serializeSessions(localSessions.sessions));
+  return localSessions;
+}
 
 export default function Home() {
-  // --- 状态管理 ---
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'bot', content: '嗨！我是熊熊（自嘲熊）捏~ 🍙 请问有什么我可以帮你的吗？虽然我很懒，但如果是陪你聊天的话... 唔，我会努力不睡着的！💤 ✨' }
-  ]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState('');
+  const [hasHydrated, setHasHydrated] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [media, setMedia] = useState<MediaFile | null>(null);
 
-  // 模型选择状态
-  const [selectedProvider, setSelectedProvider] = useState(AI_PROVIDERS[0].id);
-  const [selectedModel, setSelectedModel] = useState(AI_PROVIDERS[0].models[0].id);
+  const defaults = useMemo(() => getDefaultProviderModel(), []);
+  const [selectedProvider, setSelectedProvider] = useState(defaults.provider);
+  const [selectedModel, setSelectedModel] = useState(defaults.model);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // 提示框状态
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const saveVersionRef = useRef(0);
 
-  // --- 辅助函数 ---
+  const sortedSessions = useMemo(
+    () => sessions.slice().sort((a, b) => b.updatedAt - a.updatedAt),
+    [sessions]
+  );
+  const activeSession = sessions.find((session) => session.id === activeSessionId) || sessions[0];
+  const messages = activeSession?.messages ?? [WELCOME_MESSAGE];
 
-  // 显示 Toast 提示
   const showToastNotification = (msg: string) => {
     setToastMessage(msg);
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000); // 3秒后自动消失
+    window.setTimeout(() => setShowToast(false), 3000);
   };
 
-  // 滚动到底部
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // 自嘲熊点击互动
-  const handleNaganoClick = () => {
-    const randomQuote = NAGANO_QUOTES[Math.floor(Math.random() * NAGANO_QUOTES.length)];
-    showToastNotification(randomQuote);
+  const updateSession = (sessionId: string, updater: (session: ChatSession) => ChatSession) => {
+    setSessions((prev) => prev.map((session) => (session.id === sessionId ? updater(session) : session)));
   };
 
-  // 格式化错误信息（针对前端显示的兜底逻辑）
+  const updateSessionMessages = (sessionId: string, updater: (messages: Message[]) => Message[]) => {
+    updateSession(sessionId, (session) => {
+      const nextMessages = updater(session.messages).slice(-HISTORY_LIMIT);
+      return {
+        ...session,
+        title: session.title === '新会话' ? deriveTitle(nextMessages) : session.title,
+        messages: nextMessages,
+        updatedAt: Date.now(),
+      };
+    });
+  };
+
   const formatErrorMessage = (errorData: any): string => {
     if (!errorData) return '未知错误';
 
-    // 如果后端已经确返回了 userMessage，直接使用
-    if (errorData.userMessage) {
-      let msg = `❌ **${errorData.userMessage}**\n\n💡 ${errorData.suggestion || ''}`;
+    const rawMessage = typeof errorData.message === 'string' ? errorData.message : '';
+    if (/^\s*<!doctype html/i.test(rawMessage) || /^\s*<html/i.test(rawMessage)) {
+      return `**请求失败**\n\n聊天接口返回了 HTML 页面，而不是预期的数据流。通常是开发服务器热更新或构建状态异常导致的，请刷新页面；如果仍然出现，请重启 3000 端口的开发服务。`;
+    }
 
-      // 添加切换建议
+    if (errorData.userMessage) {
+      let msg = `**${errorData.userMessage}**\n\n${errorData.suggestion || ''}`;
+
       if (errorData.alternativeProvider && errorData.alternativeModel) {
-        const providerName = errorData.alternativeProvider === 'google' ? 'Google Gemini' : '通义千问';
-        msg += `\n\n🔄 建议切换到：**${providerName}**`;
+        const providerName = errorData.alternativeProvider === 'bailian' ? '阿里云百炼' : errorData.alternativeProvider;
+        msg += `\n\n建议切换到：**${providerName}**`;
       }
       return msg;
     }
 
-    // 兜底逻辑
-    return `❌ **请求失败**\n\n错误信息: ${errorData.message || JSON.stringify(errorData)}`;
+    return `**请求失败**\n\n错误信息: ${rawMessage || errorData.error || JSON.stringify(errorData)}`;
   };
 
-  // --- Effects (生命周期) ---
-
-  // 1. 初始化加载历史记录和设置
-  useEffect(() => {
-    try {
-      const cached = localStorage.getItem(STORAGE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached) as Pick<Message, 'role' | 'content'>[];
-        if (Array.isArray(parsed) && parsed.length) {
-          setMessages(parsed.slice(-HISTORY_LIMIT));
-        }
-      }
-
-      const savedProvider = localStorage.getItem(STORAGE_PROVIDER_KEY);
-      const savedModel = localStorage.getItem(STORAGE_MODEL_KEY);
-      if (savedProvider) {
-        const provider = AI_PROVIDERS.find(p => p.id === savedProvider);
-        if (provider) {
-          setSelectedProvider(savedProvider);
-          const modelExists = savedModel && provider.models.find(m => m.id === savedModel);
-          setSelectedModel(modelExists ? savedModel : provider.models[0].id);
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to load cached data', err);
+  const readErrorResponse = async (res: Response) => {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return res.json();
     }
+
+    return {
+      message: await res.text(),
+      status: res.status,
+      contentType,
+    };
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrate = async () => {
+      try {
+        const loaded = await loadStoredSessions();
+        if (!isMounted) return;
+
+        const active = loaded.sessions.find((session) => session.id === loaded.activeSessionId) || loaded.sessions[0];
+
+        setSessions(loaded.sessions);
+        setActiveSessionId(active.id);
+        setSelectedProvider(active.provider);
+        setSelectedModel(active.model);
+      } catch (err) {
+        console.warn('Failed to load cached sessions', err);
+        if (!isMounted) return;
+
+        const session = createSession();
+        setSessions([session]);
+        setActiveSessionId(session.id);
+        setSelectedProvider(session.provider);
+        setSelectedModel(session.model);
+      } finally {
+        if (isMounted) setHasHydrated(true);
+      }
+    };
+
+    void hydrate();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // 2. 保存设置
   useEffect(() => {
-    localStorage.setItem(STORAGE_PROVIDER_KEY, selectedProvider);
-    localStorage.setItem(STORAGE_MODEL_KEY, selectedModel);
-  }, [selectedProvider, selectedModel]);
+    if (!hasHydrated || !sessions.length) return;
+    const saveVersion = saveVersionRef.current + 1;
+    saveVersionRef.current = saveVersion;
 
-  // 3. 保存历史记录 (仅文本)
-  useEffect(() => {
-    const payload = messages
-      .slice(-HISTORY_LIMIT)
-      .map(({ role, content }) => ({ role, content }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [messages]);
+    const save = async () => {
+      try {
+        await syncIndexedSessions(serializeSessions(sessions));
+        if (saveVersion !== saveVersionRef.current) return;
 
-  // 4. 自动滚动
+        localStorage.setItem(STORAGE_ACTIVE_SESSION_KEY, activeSessionId);
+        localStorage.setItem(STORAGE_PROVIDER_KEY, selectedProvider);
+        localStorage.setItem(STORAGE_MODEL_KEY, selectedModel);
+      } catch (err) {
+        console.warn('Failed to save sessions', err);
+        showToastNotification('IndexedDB 历史保存失败，请检查浏览器站点存储权限');
+      }
+    };
+
+    void save();
+  }, [activeSessionId, hasHydrated, selectedModel, selectedProvider, sessions]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // --- 事件处理 ---
-
   const handleModelChange = (providerId: string, modelId: string) => {
-    // 如果真的改变了才提示
     if (selectedProvider !== providerId || selectedModel !== modelId) {
-      const provider = AI_PROVIDERS.find(p => p.id === providerId);
-      const model = provider?.models.find(m => m.id === modelId);
+      const provider = AI_PROVIDERS.find((p) => p.id === providerId);
+      const model = provider?.models.find((m) => m.id === modelId);
       showToastNotification(`已切换到 ${provider?.name} - ${model?.name}`);
     }
+
     setSelectedProvider(providerId);
     setSelectedModel(modelId);
+
+    if (activeSessionId) {
+      updateSession(activeSessionId, (session) => ({
+        ...session,
+        provider: providerId,
+        model: modelId,
+        updatedAt: Date.now(),
+      }));
+    }
+  };
+
+  const handleNewSession = () => {
+    if (isLoading) return;
+
+    const session = createSession({
+      provider: selectedProvider,
+      model: selectedModel,
+    });
+    setSessions((prev) => [session, ...prev].slice(0, SESSION_LIMIT));
+    setActiveSessionId(session.id);
+    setInput('');
+    setMedia(null);
+    setIsSidebarOpen(false);
+  };
+
+  const handleSelectSession = (session: ChatSession) => {
+    if (isLoading) return;
+
+    setActiveSessionId(session.id);
+    setSelectedProvider(session.provider);
+    setSelectedModel(session.model);
+    setIsSidebarOpen(false);
+  };
+
+  const handleRenameSession = (session: ChatSession) => {
+    const nextTitle = window.prompt('重命名会话', session.title)?.trim();
+    if (!nextTitle) return;
+
+    updateSession(session.id, (current) => ({
+      ...current,
+      title: nextTitle.slice(0, 48),
+      updatedAt: Date.now(),
+    }));
+  };
+
+  const handleDeleteSession = (sessionId: string) => {
+    if (isLoading) return;
+    if (!window.confirm('删除这个会话？')) return;
+
+    setSessions((prev) => {
+      const rest = prev.filter((session) => session.id !== sessionId);
+      if (rest.length) {
+        if (sessionId === activeSessionId) {
+          const next = rest.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0];
+          setActiveSessionId(next.id);
+          setSelectedProvider(next.provider);
+          setSelectedModel(next.model);
+        }
+        return rest;
+      }
+
+      const session = createSession({
+        provider: selectedProvider,
+        model: selectedModel,
+      });
+      setActiveSessionId(session.id);
+      return [session];
+    });
+  };
+
+  const handleClearActiveSession = () => {
+    if (!activeSession || isLoading) return;
+    if (!window.confirm('清空当前会话内容？')) return;
+
+    updateSession(activeSession.id, (session) => ({
+      ...session,
+      title: '新会话',
+      messages: [WELCOME_MESSAGE],
+      updatedAt: Date.now(),
+    }));
   };
 
   const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-      setIsLoading(false);
+    if (!abortControllerRef.current || !activeSessionId) return;
 
-      // 添加一条"已停止"的消息或仅停止loading
-      setMessages(prev => [...prev, {
-        role: 'bot',
-        content: '⏹️ **生成已停止**'
-      }]);
+    const sessionId = activeSessionId;
+    abortControllerRef.current.abort();
+    abortControllerRef.current = null;
+    setIsLoading(false);
+
+    updateSessionMessages(sessionId, (prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last?.role === 'bot' && !last.content) {
+        next[next.length - 1] = { ...last, content: '**生成已停止**' };
+        return next;
+      }
+
+      return [
+        ...next,
+        {
+          role: 'bot',
+          content: '**生成已停止**',
+        },
+      ];
+    });
+  };
+
+  const updateStreamingBotMessage = (
+    sessionId: string,
+    botIndex: number,
+    content: string,
+    toolCalls?: ToolCall[]
+  ) => {
+    updateSessionMessages(sessionId, (prev) => {
+      const next = [...prev];
+      const targetIndex = next[botIndex]?.role === 'bot' ? botIndex : next.length - 1;
+      const existing = next[targetIndex];
+      if (!existing || existing.role !== 'bot') return prev;
+      next[targetIndex] = {
+        ...existing,
+        content,
+        toolCalls: toolCalls ?? existing.toolCalls,
+      };
+      return next;
+    });
+  };
+
+  const readStreamingResponse = async (res: Response, sessionId: string, botIndex: number) => {
+    if (!res.body) throw new Error('ReadableStream is not available');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let assistantContent = '';
+    let toolCalls: ToolCall[] | undefined;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+
+        const event = JSON.parse(line);
+        if (event.type === 'token') {
+          assistantContent += event.value || '';
+          updateStreamingBotMessage(sessionId, botIndex, assistantContent, toolCalls);
+        } else if (event.type === 'tool_calls') {
+          toolCalls = event.toolCalls || [];
+          updateStreamingBotMessage(sessionId, botIndex, assistantContent || '正在整理工具调用结果...', toolCalls);
+        } else if (event.type === 'error') {
+          updateStreamingBotMessage(sessionId, botIndex, formatErrorMessage(event.error), toolCalls);
+        } else if (event.type === 'done') {
+          updateStreamingBotMessage(sessionId, botIndex, assistantContent || event.text || '', toolCalls);
+        }
+      }
     }
+
+    if (buffer.trim()) {
+      const event = JSON.parse(buffer.trim());
+      if (event.type === 'token') {
+        assistantContent += event.value || '';
+      }
+    }
+
+    updateStreamingBotMessage(sessionId, botIndex, assistantContent, toolCalls);
   };
 
   const handleSubmit = async () => {
-    if ((!input.trim() && !media) || isLoading) return;
+    if ((!input.trim() && !media) || isLoading || !activeSession) return;
 
     const userMessage = input.trim();
     const currentMedia = media;
-
-    // 检查媒体支持
-    const currentProvider = AI_PROVIDERS.find(p => p.id === selectedProvider);
-    const currentModel = currentProvider?.models.find(m => m.id === selectedModel);
+    const sessionId = activeSession.id;
+    const currentProvider = AI_PROVIDERS.find((p) => p.id === selectedProvider);
+    const currentModel = currentProvider?.models.find((m) => m.id === selectedModel);
 
     if (currentMedia) {
       const isVideo = currentMedia.type === 'video';
       if (isVideo && !currentModel?.supportsVideo) {
-        alert(`❌ 模型 ${currentModel?.name} 不支持视频，请切换模型。`);
+        showToastNotification(`模型 ${currentModel?.name} 不支持视频，请切换模型。`);
         return;
       }
       if (!isVideo && !currentModel?.supportsVision) {
-        alert(`❌ 模型 ${currentModel?.name} 不支持图片，请切换模型。`);
+        showToastNotification(`模型 ${currentModel?.name} 不支持图片，请切换模型。`);
         return;
       }
     }
 
-    // 立即显示用户消息
-    const newMessages: Message[] = [
-      ...messages,
-      {
-        role: 'user',
-        content: userMessage,
-        media: currentMedia ? { ...currentMedia } : undefined
-      }
-    ];
-    setMessages(newMessages);
+    const userEntry: Message = {
+      role: 'user',
+      content: userMessage,
+      media: currentMedia ? { ...currentMedia } : undefined,
+    };
+    const newMessages = [...messages, userEntry];
+    const botEntry: Message = { role: 'bot', content: '' };
+    const botIndex = newMessages.length;
+
+    updateSession(sessionId, (session) => ({
+      ...session,
+      title: session.title === '新会话' ? deriveTitle(newMessages) : session.title,
+      messages: [...newMessages, botEntry].slice(-HISTORY_LIMIT),
+      provider: selectedProvider,
+      model: selectedModel,
+      updatedAt: Date.now(),
+    }));
     setInput('');
-    setMedia(null); // 清空输入框媒体，但保留 history 中的
+    setMedia(null);
     setIsLoading(true);
 
-    // Create new abort controller
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     try {
-      // 准备请求历史
-      const history = messages.slice(1).map(m => ({ role: m.role, content: m.content }));
+      const history = messages.slice(1).map((message) => ({ role: message.role, content: message.content }));
 
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/x-ndjson',
+        },
         body: JSON.stringify({
           message: userMessage,
           media: currentMedia ? { data: currentMedia.data, mimeType: currentMedia.mimeType } : null,
@@ -216,51 +582,90 @@ export default function Home() {
           provider: selectedProvider,
           model: selectedModel,
           enableTools: true,
+          stream: true,
         }),
-        signal: abortController.signal
+        signal: abortController.signal,
       });
 
-      const data = await res.json();
-
+      const contentType = res.headers.get('content-type') || '';
       if (!res.ok) {
-        const errorText = formatErrorMessage(data);
-        setMessages(prev => [...prev, {
-          role: 'bot',
-          content: errorText,
-          error: data // 保存原始错误数据以便 CheckMessage 渲染按钮
-        }]);
+        const data = await readErrorResponse(res);
+        updateStreamingBotMessage(sessionId, botIndex, formatErrorMessage(data));
         return;
       }
 
-      setMessages(prev => [...prev, {
-        role: 'bot',
-        content: data.text,
-        toolCalls: data.toolCalls
-      }]);
-
+      if (contentType.includes('application/x-ndjson')) {
+        await readStreamingResponse(res, sessionId, botIndex);
+      } else if (contentType.includes('application/json')) {
+        const data = await res.json();
+        updateStreamingBotMessage(sessionId, botIndex, data.text, data.toolCalls);
+      } else {
+        const data = await readErrorResponse(res);
+        updateStreamingBotMessage(sessionId, botIndex, formatErrorMessage(data));
+      }
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        console.log('Fetch aborted');
-        return;
-      }
+      if (error.name === 'AbortError') return;
       console.error(error);
-      setMessages(prev => [...prev, {
-        role: 'bot',
-        content: '🌐 **网络请求失败**\n\n请检查您的网络连接是否正常。'
-      }]);
+      updateStreamingBotMessage(sessionId, botIndex, '**网络请求失败**\n\n请检查您的网络连接是否正常。');
     } finally {
       setIsLoading(false);
       abortControllerRef.current = null;
     }
   };
 
-  // --- 渲染 ---
   return (
     <div className={styles.page}>
       <Toast message={toastMessage} isVisible={showToast} />
 
+      {isSidebarOpen && <button className={styles.sidebarScrim} onClick={() => setIsSidebarOpen(false)} aria-label="关闭侧边栏" />}
+
+      <aside className={`${styles.sidebar} ${isSidebarOpen ? styles.sidebarOpen : ''}`}>
+        <div className={styles.sidebarHeader}>
+          <div>
+            <div className={styles.sidebarTitle}>历史会话</div>
+            <div className={styles.sidebarMeta}>{sortedSessions.length} 个本地会话</div>
+          </div>
+          <button className={styles.newChatButton} onClick={handleNewSession} disabled={isLoading}>
+            新建
+          </button>
+        </div>
+
+        <div className={styles.sessionList}>
+          {sortedSessions.map((session) => (
+            <div
+              key={session.id}
+              className={`${styles.sessionItem} ${session.id === activeSessionId ? styles.sessionItemActive : ''}`}
+            >
+              <button
+                className={styles.sessionMain}
+                onClick={() => handleSelectSession(session)}
+                disabled={isLoading}
+                title={session.title}
+              >
+                <span className={styles.sessionName}>{session.title}</span>
+                <span className={styles.sessionInfo}>
+                  {formatSessionTime(session.updatedAt)} · {Math.max(0, session.messages.length - 1)} 条
+                </span>
+              </button>
+              <div className={styles.sessionActions}>
+                <button onClick={() => handleRenameSession(session)} title="重命名" aria-label="重命名会话">
+                  ✎
+                </button>
+                <button onClick={() => handleDeleteSession(session.id)} title="删除" aria-label="删除会话" disabled={isLoading}>
+                  ×
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </aside>
+
       <div className={styles.panel}>
         <header className={styles.header}>
+          <button className={styles.sidebarToggle} onClick={() => setIsSidebarOpen(true)} aria-label="打开历史会话">
+            ☰
+          </button>
+
           <ModelSelector
             selectedProvider={selectedProvider}
             selectedModel={selectedModel}
@@ -268,31 +673,32 @@ export default function Home() {
             isOpen={showModelSelector}
             setIsOpen={setShowModelSelector}
           />
+
+          <div className={styles.headerSpacer} />
+          <button className={styles.clearButton} onClick={handleClearActiveSession} disabled={isLoading || !activeSession}>
+            清空当前
+          </button>
         </header>
 
         <main className={styles.chat}>
-          {messages.map((msg, idx) => (
-            <ChatMessage
-              key={idx}
-              message={msg}
-              onQuickSwitch={(p, m) => handleModelChange(p, m)}
-              onManualSwitch={() => setShowModelSelector(true)}
-              onAvatarClick={handleNaganoClick}
-            />
-          ))}
+          {messages.map((msg, idx) => {
+            const isPendingBot = isLoading && idx === messages.length - 1 && msg.role === 'bot' && !msg.content;
+            if (isPendingBot) return null;
 
-          {isLoading && (
+            return (
+              <ChatMessage
+                key={`${activeSession?.id || 'session'}-${idx}`}
+                message={msg}
+                onQuickSwitch={(p, m) => handleModelChange(p, m)}
+                onManualSwitch={() => setShowModelSelector(true)}
+              />
+            );
+          })}
+
+          {isLoading && messages[messages.length - 1]?.role === 'bot' && !messages[messages.length - 1]?.content && (
             <div className={`${styles.row} ${styles.rowBot}`}>
-              <div
-                className={styles.avatar}
-                onClick={handleNaganoClick}
-                title="点点我捏~"
-              >
-                <img
-                  src="/images/nagano.png"
-                  alt="Nagano Bear"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-                />
+              <div className={styles.avatar}>
+                <div className={styles.aiAvatar}>AI</div>
               </div>
               <div className={`${styles.bubble} ${styles.bubbleBot} ${styles.typing}`}>
                 <span className={styles.dot} />

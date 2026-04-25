@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import styles from './ChatMessage.module.css';
 import { Message, ToolCall } from '@/app/types';
@@ -7,34 +7,29 @@ interface ChatMessageProps {
     message: Message;
     onQuickSwitch?: (provider: string, model: string) => void;
     onManualSwitch?: () => void;
-    onAvatarClick?: () => void;
 }
 
-export function ChatMessage({ message, onQuickSwitch, onManualSwitch, onAvatarClick }: ChatMessageProps) {
+export function ChatMessage({ message, onQuickSwitch, onManualSwitch }: ChatMessageProps) {
     const isUser = message.role === 'user';
-    const [isAnimating, setIsAnimating] = React.useState(false);
-
-    const handleAvatarClick = () => {
-        if (isUser || !onAvatarClick) return;
-        setIsAnimating(true);
-        onAvatarClick();
-        setTimeout(() => setIsAnimating(false), 500);
-    };
 
     return (
         <div className={`${styles.row} ${isUser ? styles.rowUser : styles.rowBot}`}>
-            {/* AI Avatar (Left) - 自嘲熊 Nagano */}
+            {/* AI Avatar (Left) */}
             {!isUser && (
-                <div
-                    className={`${styles.avatar} ${isAnimating ? styles.avatarActive : ''}`}
-                    onClick={handleAvatarClick}
-                    title="点点我捏~"
-                >
-                    <img
-                        src="/images/nagano.png"
-                        alt="自嘲熊 Nagano Bear"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
+                <div className={styles.avatar}>
+                    <div style={{
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                        color: 'white',
+                        fontSize: '16px',
+                        fontWeight: 'bold'
+                    }}>
+                        AI
+                    </div>
                 </div>
             )}
 
@@ -85,7 +80,7 @@ export function ChatMessage({ message, onQuickSwitch, onManualSwitch, onAvatarCl
                                     message.error!.alternativeModel!
                                 )}
                             >
-                                🔄 切换到 {message.error.alternativeProvider === 'google' ? 'Google' : 'Qwen'}
+                                🔄 切换到 {message.error.alternativeProvider === 'bailian' ? '阿里云百炼' : message.error.alternativeProvider}
                             </button>
                         )}
                         <button
@@ -164,6 +159,66 @@ function ToolResult({ toolCall }: { toolCall: ToolCall }) {
                             <div style={{ fontWeight: 600 }}>{day.max_temp}° / {day.min_temp}°</div>
                         </div>
                     ))}
+                </div>
+            </div>
+        );
+    }
+
+    // 3. Polish Text Result
+    if (toolName === 'polish_text' && data?.polished_text) {
+        return (
+            <div className={`${styles.toolCard} ${styles.polishCard}`}>
+                <div className={styles.polishHeader}>
+                    <span className={styles.polishIcon}>✏️</span>
+                    <span className={styles.polishTitle}>
+                        文本润色
+                        {data.mode && <span className={styles.polishMode}> · {data.mode}</span>}
+                    </span>
+                </div>
+
+                {data.field && data.field !== '通用' && (
+                    <div className={styles.polishField}>
+                        学科领域: {data.field}
+                    </div>
+                )}
+
+                <div className={styles.polishSection}>
+                    <div className={styles.polishLabel}>原文</div>
+                    <div className={styles.originalText}>{data.original_text}</div>
+                </div>
+
+                <div className={styles.polishSection}>
+                    <div className={styles.polishLabel}>润色后</div>
+                    <div className={styles.polishedText}>{data.polished_text}</div>
+                </div>
+
+                {data.changes && data.changes.length > 0 && (
+                    <div className={styles.polishSection}>
+                        <div className={styles.polishLabel}>修改说明</div>
+                        <ul className={styles.changesList}>
+                            {data.changes.map((change: string, idx: number) => (
+                                <li key={idx} className={styles.changeItem}>{change}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                {data.key_improvements && (
+                    <div className={styles.polishSection}>
+                        <div className={styles.polishLabel}>主要改进</div>
+                        <div className={styles.keyImprovements}>{data.key_improvements}</div>
+                    </div>
+                )}
+
+                <div className={styles.polishActions}>
+                    <button
+                        className={styles.copyButton}
+                        onClick={() => {
+                            navigator.clipboard.writeText(data.polished_text);
+                        }}
+                    >
+                        复制润色结果
+                    </button>
                 </div>
             </div>
         );

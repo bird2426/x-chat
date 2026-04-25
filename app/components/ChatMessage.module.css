@@ -14,75 +14,27 @@
     justify-content: flex-start;
 }
 
-/* 自嘲熊 Avatar with breathing animation */
-@keyframes breathe {
-
-    0%,
-    100% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(1.05);
-    }
-}
-
+/* Avatar Styles */
 .avatar {
     width: 42px;
     height: 42px;
     border-radius: 50%;
-    /* 圆形头像更可爱 */
     display: flex;
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
     overflow: hidden;
-    /* 确保图片不溢出 */
     background: #fff;
-    border: 3px solid var(--secondary);
-    /* 粉色边框 */
-    box-shadow:
-        0 4px 12px var(--shadow),
-        inset 0 1px 2px rgba(255, 255, 255, 0.5);
+    border: 2px solid var(--border);
+    box-shadow: 0 2px 8px var(--shadow);
     margin-top: 2px;
-    animation: breathe 3s ease-in-out infinite;
-    /* 慢一点更温柔 */
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
 .avatar:hover {
-    transform: scale(1.1) rotate(5deg);
-    /* 更活泼的交互 */
-    box-shadow:
-        0 6px 20px rgba(255, 214, 214, 0.4),
-        inset 0 1px 2px rgba(255, 255, 255, 0.5);
-    animation: none;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px var(--shadow);
     border-color: var(--primary);
-}
-
-.avatarActive {
-    animation: naganoBounce 0.5s ease-in-out !important;
-}
-
-@keyframes naganoBounce {
-
-    0%,
-    100% {
-        transform: scale(1);
-    }
-
-    30% {
-        transform: scale(1.2) translateY(-5px) rotate(-10deg);
-    }
-
-    50% {
-        transform: scale(0.9) translateY(2px) rotate(5deg);
-    }
-
-    70% {
-        transform: scale(1.1) translateY(-2px) rotate(-3deg);
-    }
 }
 
 .avatarUser {
@@ -502,4 +454,129 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+/* Polish Text Card Styles */
+.polishCard {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    padding: 0;
+}
+
+.polishHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border-bottom: 1px solid var(--border);
+}
+
+.polishIcon {
+    font-size: 20px;
+}
+
+.polishTitle {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0369a1;
+}
+
+.polishMode {
+    font-size: 13px;
+    font-weight: 500;
+    color: #0284c7;
+    text-transform: uppercase;
+}
+
+.polishField {
+    padding: 8px 20px;
+    background: #f8fafc;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: #64748b;
+}
+
+.polishSection {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.polishSection:last-of-type {
+    border-bottom: none;
+}
+
+.polishLabel {
+    font-size: 12px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.originalText {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #64748b;
+    background: #f8fafc;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 3px solid #cbd5e1;
+}
+
+.polishedText {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #0f172a;
+    background: #f0f9ff;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 3px solid #0284c7;
+}
+
+.changesList {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.changeItem {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #475569;
+    margin-bottom: 4px;
+}
+
+.keyImprovements {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #059669;
+    background: #f0fdf4;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border-left: 3px solid #22c55e;
+}
+
+.polishActions {
+    padding: 12px 20px;
+    background: #f8fafc;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.copyButton {
+    background: #0284c7;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.copyButton:hover {
+    background: #0369a1;
 }

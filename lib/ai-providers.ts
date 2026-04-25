@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 
 export interface AIProvider {
@@ -17,70 +16,65 @@ export interface AIModel {
 
 export const AI_PROVIDERS: AIProvider[] = [
   {
-    id: "google",
-    name: "Google Gemini",
+    id: "bailian",
+    name: "阿里云百炼",
     requiresApiKey: true,
     models: [
+      // 千问
       {
-        id: "gemini-2.5-flash",
-        name: "Gemini 2.5 Flash (多模态)",
-        supportsVision: true,
-        supportsVideo: true,
-      },
-    ],
-  },
-  {
-    id: "qwen",
-    name: "Qwen",
-    requiresApiKey: true,
-    models: [
-      {
-        id: "qwen-plus-2025-12-01",
-        name: "qwen-plus-2025-12-01",
-        supportsVision: false,
-        supportsVideo: false,
-      },
-      {
-        id: "qwen3-max-preview",
-        name: "qwen3-max-preview",
-        supportsVision: false,
-        supportsVideo: false,
-      },
-      {
-        id: "qwen3-vl-plus-2025-12-19",
-        name: "qwen3-vl-plus-2025-12-19",
+        id: "qwen3.6-plus",
+        name: "Qwen3.6-Plus",
         supportsVision: true,
         supportsVideo: false,
       },
-    ],
-  },
-  {
-    id: "deepseek",
-    name: "DeepSeek",
-    requiresApiKey: true,
-    models: [
       {
-        id: "deepseek-v3.2",
-        name: "deepseek-v3.2",
+        id: "qwen3.5-plus",
+        name: "Qwen3.5-Plus",
+        supportsVision: true,
+        supportsVideo: false,
+      },
+      {
+        id: "qwen3-max-2026-01-23",
+        name: "Qwen3-Max",
         supportsVision: false,
         supportsVideo: false,
       },
       {
-        id: "deepseek-v3.1",
-        name: "deepseek-v3.1",
+        id: "qwen3-coder-next",
+        name: "Qwen3-Coder-Next",
         supportsVision: false,
         supportsVideo: false,
       },
-    ],
-  },
-  {
-    id: "kimi",
-    name: "Kimi",
-    requiresApiKey: true,
-    models: [
       {
-        id: "kimi-k2-thinking",
-        name: "kimi-k2-thinking",
+        id: "qwen3-coder-plus",
+        name: "Qwen3-Coder-Plus",
+        supportsVision: false,
+        supportsVideo: false,
+      },
+      // 智谱 GLM
+      {
+        id: "glm-5",
+        name: "GLM-5",
+        supportsVision: false,
+        supportsVideo: false,
+      },
+      {
+        id: "glm-4.7",
+        name: "GLM-4.7",
+        supportsVision: false,
+        supportsVideo: false,
+      },
+      // Kimi
+      {
+        id: "kimi-k2.5",
+        name: "Kimi-K2.5",
+        supportsVision: true,
+        supportsVideo: false,
+      },
+      // MiniMax
+      {
+        id: "MiniMax-M2.5",
+        name: "MiniMax-M2.5",
         supportsVision: false,
         supportsVideo: false,
       },
@@ -107,77 +101,26 @@ interface MediaData {
   mimeType: string;
 }
 
-export async function callGoogleAPI(
-  model: string,
-  message: string,
-  history: ChatMessage[],
-  media?: MediaData,
-  systemPrompt?: string
-): Promise<string> {
-  const apiKey = process.env.GOOGLE_API_KEY;
+function createBailianClient() {
+  const apiKey = process.env.BAILIAN_API_KEY;
   if (!apiKey) {
-    throw new Error("GOOGLE_API_KEY is not defined");
+    throw new Error("BAILIAN_API_KEY is not defined");
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  // Google Gemini 支持直接通过 systemInstruction 设置系统提示词
-  const genModel = genAI.getGenerativeModel({
-    model,
-    systemInstruction: systemPrompt
+  return new OpenAI({
+    apiKey,
+    baseURL: "https://coding.dashscope.aliyuncs.com/v1",
   });
-
-  const promptParts: any[] = [];
-
-  // ... (其余代码保持不变)
-
-  if (media?.data) {
-    promptParts.push({
-      inlineData: {
-        data: media.data,
-        mimeType: media.mimeType,
-      },
-    });
-  }
-
-  if (message) {
-    promptParts.push({ text: message });
-  }
-
-  const chatHistory = history.map((msg) => ({
-    role: msg.role === "user" ? "user" : "model",
-    parts: [{ text: msg.content }],
-  }));
-
-  const chat = genModel.startChat({
-    history: chatHistory,
-  });
-
-  const result = await chat.sendMessage(promptParts);
-  const response = await result.response;
-  return response.text();
 }
 
-export async function callQwenAPI(
-  model: string,
+function buildBailianMessages(
   message: string,
   history: ChatMessage[],
   media?: MediaData,
   systemPrompt?: string
-): Promise<string> {
-  const apiKey = process.env.QWEN_API_KEY;
-  if (!apiKey) {
-    throw new Error("QWEN_API_KEY is not defined");
-  }
-
-  const client = new OpenAI({
-    apiKey,
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  });
-
-  // 构造消息数组，显式指定类型以修复 TS 错误
+): any[] {
   const messages: any[] = [];
 
-  // 1. 如果有系统提示词，作为第一条 system 消息放入
   if (systemPrompt) {
     messages.push({
       role: "system",
@@ -185,7 +128,6 @@ export async function callQwenAPI(
     });
   }
 
-  // 2. 放入历史记录
   history.forEach((msg) => {
     messages.push({
       role: msg.role === "user" ? "user" : "assistant",
@@ -193,16 +135,61 @@ export async function callQwenAPI(
     });
   });
 
-  // 3. 放入当前用户消息
-  messages.push({
+  const userMessage: any = {
     role: "user",
     content: message,
-  });
+  };
 
+  if (media?.data) {
+    userMessage.content = [
+      { type: "text", text: message },
+      {
+        type: "image_url",
+        image_url: { url: `data:${media.mimeType};base64,${media.data}` },
+      },
+    ];
+  }
+
+  messages.push(userMessage);
+  return messages;
+}
+
+export async function callBailianAPI(
+  model: string,
+  message: string,
+  history: ChatMessage[],
+  media?: MediaData,
+  systemPrompt?: string
+): Promise<string> {
+  const client = createBailianClient();
+  const messages = buildBailianMessages(message, history, media, systemPrompt);
   const completion = await client.chat.completions.create({
     model,
-    messages: messages as any,
+    messages,
   });
 
   return completion.choices[0]?.message?.content || "没有响应";
+}
+
+export async function* streamBailianAPI(
+  model: string,
+  message: string,
+  history: ChatMessage[],
+  media?: MediaData,
+  systemPrompt?: string
+): AsyncGenerator<string> {
+  const client = createBailianClient();
+  const messages = buildBailianMessages(message, history, media, systemPrompt);
+  const stream = await client.chat.completions.create({
+    model,
+    messages,
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    const content = chunk.choices[0]?.delta?.content;
+    if (content) {
+      yield content;
+    }
+  }
 }

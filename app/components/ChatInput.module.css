@@ -105,7 +105,7 @@
 .form:focus-within {
     border-color: var(--primary);
     background: #fff;
-    box-shadow: 0 0 0 4px rgba(255, 228, 181, 0.3);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
 
 .fileInput {
@@ -115,7 +115,7 @@
 .iconButton {
     width: 42px;
     height: 42px;
-    border-radius: 14px;
+    border-radius: 10px;
     border: 2px solid transparent;
     background: transparent;
     color: var(--foreground);
@@ -130,7 +130,7 @@
 
 .iconButton:hover {
     background: var(--accent);
-    color: var(--foreground);
+    color: var(--primary);
     opacity: 1;
     border-color: var(--primary);
 }
@@ -138,7 +138,7 @@
 .fortuneButton {
     width: 42px;
     height: 42px;
-    border-radius: 14px;
+    border-radius: 10px;
     border: none;
     background: transparent;
     color: var(--foreground);
@@ -156,7 +156,7 @@
 
 .fortuneButton:hover {
     background: var(--accent);
-    color: var(--foreground);
+    color: var(--primary);
     opacity: 1;
 }
 
@@ -190,29 +190,26 @@
 .send {
     width: 42px;
     height: 42px;
-    border-radius: 14px;
+    border-radius: 10px;
     border: none;
-    background: var(--secondary);
-    color: var(--foreground);
+    background: var(--primary);
+    color: white;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
     flex-shrink: 0;
-    box-shadow: 0 4px 0 rgba(255, 182, 193, 0.5);
 }
 
 .send:hover:not(:disabled) {
-    transform: scale(1.05) rotate(-5deg);
-    background: #ffc2c2;
-    box-shadow: 0 6px 0 rgba(255, 182, 193, 0.6);
+    transform: scale(1.05);
+    background: #1d4ed8;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .send:active:not(:disabled) {
     transform: scale(0.95);
-    box-shadow: none;
-    transform: translateY(4px);
 }
 
 .send:disabled {

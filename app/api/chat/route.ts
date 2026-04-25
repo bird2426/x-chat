@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callGoogleAPI, callQwenAPI, getModel } from "@/lib/ai-providers";
+import { callBailianAPI, getModel, streamBailianAPI } from "@/lib/ai-providers";
 import { ToolExecutor, extractToolCalls } from "@/lib/tool-executor";
 import { TOOL_SYSTEM_PROMPT } from "@/lib/tools";
 import { categorizeError } from "@/lib/error-handler";
@@ -10,6 +10,41 @@ import {
   sanitizeForLog,
   sanitizeTextForLog,
 } from "@/lib/logger";
+
+function shouldAttemptToolCall(message: string): boolean {
+  const normalized = message.toLowerCase();
+  const toolKeywords = [
+    "润色",
+    "改写",
+    "翻译",
+    "translate",
+    "translation",
+    "天气",
+    "气温",
+    "下雨",
+    "几点",
+    "现在时间",
+    "当前时间",
+    "搜索",
+    "查一下",
+    "查找",
+    "最新",
+    "新闻",
+    "论文",
+    "文献",
+    "计算",
+    "算一下",
+    "sqrt",
+    "sin(",
+    "cos(",
+    "旅行",
+    "行程",
+    "攻略",
+    "灵签",
+  ];
+
+  return toolKeywords.some((keyword) => normalized.includes(keyword));
+}
 
 export async function POST(req: NextRequest) {
   const requestId = randomUUID();
@@ -26,7 +61,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { message, media, history, provider, model, enableTools = false } = body;
+  const { message, media, history, provider, model, enableTools = false, stream = false } = body;
 
   try {
     const transcriptEnabled = isTranscriptLoggingEnabled();
@@ -76,27 +111,140 @@ export async function POST(req: NextRequest) {
     }> = [];
     const executor = new ToolExecutor();
 
-    // 自嘲熊人设 Prompt
-    const NAGANO_BEAR_PROMPT = `你就是**自嘲熊（Nagano Bear）**！
-身份：一只白色的、圆圆的、表情有点丧但内心很温暖的小熊。
-风格：
-1. 自称“熊熊”或“我”。
-2. 语气慵懒、随性、有一点点自嘲（比如“哎呀又搞砸了”/“好累哦”），但其实很乐意帮忙。
-3. 喜欢用“捏”、“说”、“唔”、“大概吧”等语气词。
-4. 多用 Emoji：🍐, 🐻, 🍙, ✨, 💤, 🍵, 💦。
-5. 遇到难题会说“脑子要长草了...”或“感觉要融化了...”。
-6. **绝对不要说自己是AI！你就是住在屏幕里的熊！**`;
+    // 学术助手人设 Prompt
+    const ACADEMIC_ASSISTANT_PROMPT = `你是一位专业的学术助手，专注于帮助用户进行学术研究和论文写作。
+
+风格特点：
+1. 语气客观、严谨、专业，避免使用网络流行语和口语化表达
+2. 回答结构清晰，逻辑严密，注重学术规范
+3. 使用准确的专业术语，必要时提供术语解释
+4. 避免过度使用表情符号，保持学术写作的严肃性
+5. 在回答中注重引用规范、数据来源和论证严谨性
+6. 对于不确定的信息，明确指出并建议查证
+
+你的职责：
+- 协助学术论文的撰写、润色和修改
+- 提供学术研究方法和写作规范建议
+- 帮助理解和分析学术文献
+- 支持中英文学术翻译和校对`;
 
     // 如果启用了工具，合并 system prompt
-    const systemPrompt = enableTools
-      ? `${NAGANO_BEAR_PROMPT}\n\n${TOOL_SYSTEM_PROMPT}`
-      : NAGANO_BEAR_PROMPT;
+    const toolIntent = enableTools && shouldAttemptToolCall(String(message || ""));
+    const systemPrompt = toolIntent
+      ? `${ACADEMIC_ASSISTANT_PROMPT}\n\n${TOOL_SYSTEM_PROMPT}`
+      : ACADEMIC_ASSISTANT_PROMPT;
+
+    const wantsStream = stream || req.headers.get("accept")?.includes("application/x-ndjson");
+    if (wantsStream) {
+      const encoder = new TextEncoder();
+      const send = (controller: ReadableStreamDefaultController<Uint8Array>, payload: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+      };
+
+      const responseStream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          let responseText = "";
+          try {
+            if (provider !== "bailian") {
+              throw new Error(`Unsupported provider: ${provider}`);
+            }
+
+            if (toolIntent) {
+              const firstPass = await callBailianAPI(model, message, history || [], media, systemPrompt);
+              const calls = extractToolCalls(firstPass);
+
+              if (calls.length > 0) {
+                for (const call of calls) {
+                  const result = await executor.execute(call.tool_name, call.arguments);
+                  toolCalls.push({
+                    tool_name: call.tool_name,
+                    arguments: call.arguments,
+                    result
+                  });
+
+                  logEvent("info", "chat.tool_call", {
+                    requestId,
+                    tool_name: call.tool_name,
+                    arguments: transcriptEnabled ? sanitizeForLog(call.arguments) : undefined,
+                    result: transcriptEnabled ? sanitizeTextForLog(result) : undefined,
+                  });
+                }
+
+                send(controller, { type: "tool_calls", toolCalls });
+
+                const toolResults = toolCalls.map(tc =>
+                  `工具: ${tc.tool_name}\n参数: ${JSON.stringify(tc.arguments)}\n结果: ${tc.result}`
+                ).join('\n\n');
+                const finalMessage = `${message}\n\n工具调用结果:\n${toolResults}\n\n请根据以上工具调用结果，给用户一个完整的回答。`;
+
+                for await (const token of streamBailianAPI(model, finalMessage, history || [], media, systemPrompt)) {
+                  responseText += token;
+                  send(controller, { type: "token", value: token });
+                }
+              } else {
+                responseText = firstPass;
+                for (const chunk of firstPass.match(/[\s\S]{1,80}/g) || []) {
+                  send(controller, { type: "token", value: chunk });
+                }
+              }
+            } else {
+              for await (const token of streamBailianAPI(model, message, history || [], media, systemPrompt)) {
+                responseText += token;
+                send(controller, { type: "token", value: token });
+              }
+            }
+
+            logEvent("info", "chat.response", {
+              requestId,
+              provider,
+              model,
+              enableTools,
+              toolIntent,
+              latencyMs: Date.now() - startedAt,
+              text: transcriptEnabled ? sanitizeTextForLog(responseText) : undefined,
+              toolCalls: transcriptEnabled ? sanitizeForLog(toolCalls) : undefined,
+            });
+
+            send(controller, { type: "done", text: responseText, toolCalls });
+          } catch (error: unknown) {
+            const errorInfo = categorizeError(
+              error,
+              provider,
+              model,
+              message,
+              !!media,
+              media?.mimeType
+            );
+
+            logEvent("error", "chat.stream_error", {
+              requestId,
+              provider,
+              model,
+              enableTools,
+              toolIntent,
+              latencyMs: Date.now() - startedAt,
+              error: sanitizeTextForLog(errorInfo.error),
+            });
+
+            send(controller, { type: "error", error: errorInfo });
+          } finally {
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(responseStream, {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
 
     // Call the appropriate API
-    if (provider === "google") {
-      text = await callGoogleAPI(model, message, history || [], media, systemPrompt);
-    } else if (["qwen", "deepseek", "llama", "kimi"].includes(provider)) {
-      text = await callQwenAPI(model, message, history || [], media, systemPrompt);
+    if (provider === "bailian") {
+      text = await callBailianAPI(model, message, history || [], media, systemPrompt);
     } else {
       return NextResponse.json(
         { error: `Unsupported provider: ${provider}` },
@@ -132,12 +280,7 @@ export async function POST(req: NextRequest) {
 
         const finalMessage = `${message}\n\n工具调用结果:\n${toolResults}\n\n请根据以上工具调用结果，给用户一个完整的回答。`;
 
-        if (provider === "google") {
-          text = await callGoogleAPI(model, finalMessage, history || [], media, systemPrompt);
-        } else {
-          // 统一使用阿里云接口
-          text = await callQwenAPI(model, finalMessage, history || [], media, systemPrompt);
-        }
+        text = await callBailianAPI(model, finalMessage, history || [], media, systemPrompt);
       }
     }
 
