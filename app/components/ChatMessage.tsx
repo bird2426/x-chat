@@ -80,7 +80,8 @@ export function ChatMessage({ message, onQuickSwitch, onManualSwitch }: ChatMess
                                     message.error!.alternativeModel!
                                 )}
                             >
-                                🔄 切换到 {message.error.alternativeProvider === 'bailian' ? '阿里云百炼' : message.error.alternativeProvider}
+                                🔄 切换到 {message.error.alternativeProvider === 'bailian' ? '阿里云百炼' : 'Google Gemini'}
+                                {message.error.alternativeModelDisplayName ? ` - ${message.error.alternativeModelDisplayName}` : ''}
                             </button>
                         )}
                         <button
@@ -266,6 +267,54 @@ function ToolResult({ toolCall }: { toolCall: ToolCall }) {
 
                 <div className={styles.travelFooter}>
                     💡 {data.tips || "祝你旅途愉快！"}
+                </div>
+            </div>
+        );
+    }
+
+    if (toolName === 'cyber_fortune_telling' && data?.fortune_level) {
+        return (
+            <div className={`${styles.toolCard} ${styles.fortuneCard}`}>
+                <div className={styles.fortuneScanline} />
+                <div className={styles.fortuneHeader}>
+                    <div>
+                        <div className={styles.fortuneKicker}>CYBER ORACLE</div>
+                        <div className={styles.fortuneTitle}>赛博灵签</div>
+                    </div>
+                    <div className={styles.fortuneCategory}>{data.category || '综合'}</div>
+                </div>
+
+                <div className={styles.fortuneStage} aria-label="赛博抽签动画">
+                    <div className={styles.fortuneRing}>
+                        <span />
+                        <span />
+                        <span />
+                    </div>
+                    <div className={styles.fortuneStick}>
+                        <div className={styles.fortuneStickLabel}>签</div>
+                    </div>
+                    <div className={styles.fortuneParticles}>
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                    </div>
+                </div>
+
+                <div className={styles.fortuneReveal}>
+                    <div className={styles.fortuneLevel}>{data.fortune_level}</div>
+                    <div className={styles.fortuneResultTitle}>{data.title}</div>
+                    <div className={styles.fortuneText}>{data.interpretation}</div>
+                </div>
+
+                <div className={styles.fortuneFooter}>
+                    <div>
+                        <span className={styles.fortuneFooterLabel}>幸运物</span>
+                        <span className={styles.fortuneFooterValue}>{data.lucky_item || '一杯热饮'}</span>
+                    </div>
+                    {data.tips && <div className={styles.fortuneTip}>{data.tips}</div>}
                 </div>
             </div>
         );

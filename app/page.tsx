@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './page.module.css';
-import { AI_PROVIDERS } from '@/lib/ai-providers';
-import { ChatSession, Message, MediaFile, ToolCall } from '@/app/types';
+import { AI_PROVIDERS } from '@/lib/ai-models';
+import { ChatSession, ErrorInfo, Message, MediaFile, ToolCall } from '@/app/types';
 import { ChatMessage } from '@/app/components/ChatMessage';
 import { ModelSelector } from '@/app/components/ModelSelector';
 import { ChatInput } from '@/app/components/ChatInput';
@@ -202,6 +202,7 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState(defaults.model);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
@@ -255,13 +256,45 @@ export default function Home() {
       let msg = `**${errorData.userMessage}**\n\n${errorData.suggestion || ''}`;
 
       if (errorData.alternativeProvider && errorData.alternativeModel) {
-        const providerName = errorData.alternativeProvider === 'bailian' ? '阿里云百炼' : errorData.alternativeProvider;
-        msg += `\n\n建议切换到：**${providerName}**`;
+        const providerName = errorData.alternativeProvider === 'bailian'
+          ? '阿里云百炼'
+          : errorData.alternativeProvider === 'gemini'
+            ? 'Google Gemini'
+            : errorData.alternativeProvider;
+        const modelName = errorData.alternativeModelDisplayName || errorData.alternativeModel;
+        msg += `\n\n建议切换到：**${providerName} - ${modelName}**`;
       }
       return msg;
     }
 
     return `**请求失败**\n\n错误信息: ${rawMessage || errorData.error || JSON.stringify(errorData)}`;
+  };
+
+  const normalizeErrorInfo = (errorData: any): ErrorInfo | undefined => {
+    if (!errorData || typeof errorData !== 'object') return undefined;
+
+    const type = typeof errorData.type === 'string'
+      ? errorData.type
+      : typeof errorData.errorType === 'string'
+        ? errorData.errorType
+        : 'UNKNOWN';
+    const userMessage = typeof errorData.userMessage === 'string'
+      ? errorData.userMessage
+      : '服务暂时不可用';
+    const suggestion = typeof errorData.suggestion === 'string'
+      ? errorData.suggestion
+      : '请稍后重试或切换其他模型';
+
+    return {
+      type,
+      userMessage,
+      suggestion,
+      alternativeProvider: typeof errorData.alternativeProvider === 'string' ? errorData.alternativeProvider : undefined,
+      alternativeModel: typeof errorData.alternativeModel === 'string' ? errorData.alternativeModel : undefined,
+      alternativeModelDisplayName: typeof errorData.alternativeModelDisplayName === 'string'
+        ? errorData.alternativeModelDisplayName
+        : undefined,
+    };
   };
 
   const readErrorResponse = async (res: Response) => {
@@ -459,7 +492,8 @@ export default function Home() {
     sessionId: string,
     botIndex: number,
     content: string,
-    toolCalls?: ToolCall[]
+    toolCalls?: ToolCall[],
+    error?: ErrorInfo
   ) => {
     updateSessionMessages(sessionId, (prev) => {
       const next = [...prev];
@@ -470,6 +504,7 @@ export default function Home() {
         ...existing,
         content,
         toolCalls: toolCalls ?? existing.toolCalls,
+        error: error ?? existing.error,
       };
       return next;
     });
@@ -483,6 +518,7 @@ export default function Home() {
     let buffer = '';
     let assistantContent = '';
     let toolCalls: ToolCall[] | undefined;
+    let hasStreamError = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -504,7 +540,14 @@ export default function Home() {
           toolCalls = event.toolCalls || [];
           updateStreamingBotMessage(sessionId, botIndex, assistantContent || '正在整理工具调用结果...', toolCalls);
         } else if (event.type === 'error') {
-          updateStreamingBotMessage(sessionId, botIndex, formatErrorMessage(event.error), toolCalls);
+          hasStreamError = true;
+          updateStreamingBotMessage(
+            sessionId,
+            botIndex,
+            formatErrorMessage(event.error),
+            toolCalls,
+            normalizeErrorInfo(event.error)
+          );
         } else if (event.type === 'done') {
           updateStreamingBotMessage(sessionId, botIndex, assistantContent || event.text || '', toolCalls);
         }
@@ -518,7 +561,9 @@ export default function Home() {
       }
     }
 
-    updateStreamingBotMessage(sessionId, botIndex, assistantContent, toolCalls);
+    if (!hasStreamError) {
+      updateStreamingBotMessage(sessionId, botIndex, assistantContent, toolCalls);
+    }
   };
 
   const handleSubmit = async () => {
@@ -590,7 +635,7 @@ export default function Home() {
       const contentType = res.headers.get('content-type') || '';
       if (!res.ok) {
         const data = await readErrorResponse(res);
-        updateStreamingBotMessage(sessionId, botIndex, formatErrorMessage(data));
+        updateStreamingBotMessage(sessionId, botIndex, formatErrorMessage(data), undefined, normalizeErrorInfo(data));
         return;
       }
 
@@ -618,6 +663,58 @@ export default function Home() {
       <Toast message={toastMessage} isVisible={showToast} />
 
       {isSidebarOpen && <button className={styles.sidebarScrim} onClick={() => setIsSidebarOpen(false)} aria-label="关闭侧边栏" />}
+      {showHelp && (
+        <div className={styles.helpOverlay} role="presentation" onMouseDown={() => setShowHelp(false)}>
+          <section
+            className={styles.helpDialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="help-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className={styles.helpHeader}>
+              <div>
+                <div id="help-title" className={styles.helpTitle}>使用说明</div>
+                <div className={styles.helpSubtitle}>常用能力和操作入口</div>
+              </div>
+              <button className={styles.helpCloseButton} onClick={() => setShowHelp(false)} aria-label="关闭使用说明">
+                ×
+              </button>
+            </div>
+
+            <div className={styles.helpGrid}>
+              <div className={styles.helpItem}>
+                <div className={styles.helpItemTitle}>模型切换</div>
+                <p>点击顶部模型名称或“切换模型”，可在百炼和 Gemini 模型之间切换。模型限额或拥挤时报错气泡会给出推荐替代模型。</p>
+              </div>
+              <div className={styles.helpItem}>
+                <div className={styles.helpItemTitle}>论文润色</div>
+                <p>输入“帮我润色/改写/翻译这段……”，系统会调用论文润色工具，保留原意、引用、公式、数字和不确定性。</p>
+              </div>
+              <div className={styles.helpItem}>
+                <div className={styles.helpItemTitle}>文献与搜索</div>
+                <p>输入“搜索/查一下/最新论文”等关键词会调用网页搜索；配置 Tavily 后返回真实搜索结果。</p>
+              </div>
+              <div className={styles.helpItem}>
+                <div className={styles.helpItemTitle}>图片与视频</div>
+                <p>点击输入框左侧图片按钮上传媒体。前端会按当前模型能力限制图片或视频输入。</p>
+              </div>
+              <div className={styles.helpItem}>
+                <div className={styles.helpItemTitle}>赛博灵签</div>
+                <p>点击灵签按钮，或输入“帮我抽个赛博灵签”，会显示带动画的签文卡片。</p>
+              </div>
+              <div className={styles.helpItem}>
+                <div className={styles.helpItemTitle}>会话历史</div>
+                <p>左侧保存本地会话历史。历史存放在浏览器 IndexedDB，清除站点数据或更换浏览器后不会同步。</p>
+              </div>
+            </div>
+
+            <div className={styles.helpFooter}>
+              <span>快捷键：Enter 发送，Shift + Enter 换行，生成中可点红色按钮停止。</span>
+            </div>
+          </section>
+        </div>
+      )}
 
       <aside className={`${styles.sidebar} ${isSidebarOpen ? styles.sidebarOpen : ''}`}>
         <div className={styles.sidebarHeader}>
@@ -675,6 +772,9 @@ export default function Home() {
           />
 
           <div className={styles.headerSpacer} />
+          <button className={styles.helpButton} onClick={() => setShowHelp(true)}>
+            使用说明
+          </button>
           <button className={styles.clearButton} onClick={handleClearActiveSession} disabled={isLoading || !activeSession}>
             清空当前
           </button>

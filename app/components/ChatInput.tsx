@@ -70,7 +70,7 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
 
     const handleFortuneClick = () => {
         if (isLoading) return;
-        setInput("帮我抽个赛博灵签 (扭动)");
+        setInput("帮我抽个赛博灵签");
         setTimeout(() => inputRef.current?.focus(), 0);
     };
 

@@ -20,6 +20,7 @@ export interface ErrorInfo {
   suggestion: string;               // 解决建议
   alternativeProvider?: string;     // 推荐的备用 provider
   alternativeModel?: string;        // 推荐的备用 model
+  alternativeModelDisplayName?: string; // 推荐模型显示名
   status: number;                   // HTTP 状态码
 }
 
@@ -62,21 +63,21 @@ export function categorizeError(
   }
   
   // 6. 未知错误
-  return handleUnknownError(errorMessage);
+  return handleUnknownError(provider, model, errorMessage);
 }
 
 // ============ 错误识别函数 ============
 
 function isApiKeyMissing(error: string): boolean {
-  return /api_key.*not defined|unauthorized|401|invalid.*key/i.test(error);
+  return /api_key.*not defined|api key not valid|unauthorized|401|invalid.*key/i.test(error);
 }
 
 function isQuotaExceeded(error: string): boolean {
-  return /quota|exceeded|429|too many requests/i.test(error);
+  return /quota|exceeded|429|too many requests|resource_exhausted|billing details/i.test(error);
 }
 
 function isRateLimited(error: string): boolean {
-  return /rate limit|throttle/i.test(error);
+  return /rate limit|throttle|high demand|service unavailable|503/i.test(error);
 }
 
 function isNetworkError(error: string): boolean {
@@ -90,16 +91,18 @@ function isModelCapability(error: string): boolean {
 // ============ 错误处理函数 ============
 
 function handleApiKeyMissing(provider: string, error: string): ErrorInfo {
-  const providerName = provider === 'bailian' ? '阿里云百炼' : provider;
-  const envVarName = 'BAILIAN_API_KEY';
+  const providerName = getProviderDisplayName(provider);
+  const envVarName = provider === 'gemini' ? 'GOOGLE_API_KEY' : 'BAILIAN_API_KEY';
+  const alternative = getAlternativeModel(provider, '', undefined, false);
 
   return {
     error,
     type: ErrorType.API_KEY_MISSING,
     userMessage: `${providerName} API Key 未配置`,
     suggestion: `请在项目根目录创建 .env.local 文件，添加：\n${envVarName}=your_api_key_here`,
-    alternativeProvider: 'bailian',
-    alternativeModel: 'qwen3.6-plus',
+    alternativeProvider: alternative.provider,
+    alternativeModel: alternative.model,
+    alternativeModelDisplayName: alternative.modelDisplayName,
     status: 401
   };
 }
@@ -120,22 +123,25 @@ function handleQuotaExceeded(
   return {
     error: error || 'Quota exceeded',
     type: ErrorType.QUOTA_EXCEEDED,
-    userMessage: `${modelName} 配额已用完`,
-    suggestion: `建议切换到 ${alternative.modelDisplayName} 模型继续使用`,
+    userMessage: `${modelName} 可能已达到当前额度限制`,
+    suggestion: `该模型返回了限额或频率限制错误。建议先切换到 ${alternative.modelDisplayName} 继续使用，稍后再重试当前模型。`,
     alternativeProvider: alternative.provider,
     alternativeModel: alternative.model,
+    alternativeModelDisplayName: alternative.modelDisplayName,
     status: 429
   };
 }
 
 function handleRateLimit(provider: string, model: string, error: string): ErrorInfo {
+  const alternative = getAlternativeModel(provider, model);
   return {
     error,
     type: ErrorType.RATE_LIMIT,
     userMessage: '请求过于频繁',
-    suggestion: '请稍等片刻后再试，或切换到其他模型',
-    alternativeProvider: 'bailian',
-    alternativeModel: 'qwen3.5-plus',
+    suggestion: `请稍等片刻后再试，或切换到 ${alternative.modelDisplayName}`,
+    alternativeProvider: alternative.provider,
+    alternativeModel: alternative.model,
+    alternativeModelDisplayName: alternative.modelDisplayName,
     status: 429
   };
 }
@@ -151,23 +157,29 @@ function handleNetworkError(error: string): ErrorInfo {
 }
 
 function handleModelCapability(provider: string, error: string): ErrorInfo {
+  const alternative = getAlternativeModel(provider, '', undefined, true, error.includes('video') ? 'video/*' : 'image/*');
   return {
     error,
     type: ErrorType.MODEL_CAPABILITY,
     userMessage: error.includes('video') ? '该模型不支持视频' : '该模型不支持此功能',
-    suggestion: '请选择支持该功能的模型',
-    alternativeProvider: 'bailian',
-    alternativeModel: error.includes('video') ? 'qwen3.6-plus' : 'qwen3.6-plus',
+    suggestion: `请选择支持该功能的模型，例如 ${alternative.modelDisplayName}`,
+    alternativeProvider: alternative.provider,
+    alternativeModel: alternative.model,
+    alternativeModelDisplayName: alternative.modelDisplayName,
     status: 400
   };
 }
 
-function handleUnknownError(error: string): ErrorInfo {
+function handleUnknownError(provider: string, model: string, error: string): ErrorInfo {
+  const alternative = getAlternativeModel(provider, model);
   return {
     error,
     type: ErrorType.UNKNOWN,
     userMessage: '服务暂时不可用',
-    suggestion: '请稍后重试或切换其他模型',
+    suggestion: `请稍后重试，或切换到 ${alternative.modelDisplayName}`,
+    alternativeProvider: alternative.provider,
+    alternativeModel: alternative.model,
+    alternativeModelDisplayName: alternative.modelDisplayName,
     status: 500
   };
 }
@@ -180,6 +192,35 @@ interface AlternativeModel {
   modelDisplayName: string;
 }
 
+const FALLBACK_MODELS: AlternativeModel[] = [
+  {
+    provider: 'gemini',
+    model: 'gemini-2.5-flash-lite',
+    modelDisplayName: 'Gemini 2.5 Flash-Lite'
+  },
+  {
+    provider: 'gemini',
+    model: 'gemini-2.5-flash',
+    modelDisplayName: 'Gemini 2.5 Flash'
+  },
+  {
+    provider: 'bailian',
+    model: 'qwen3.5-plus',
+    modelDisplayName: 'Qwen3.5-Plus'
+  },
+  {
+    provider: 'bailian',
+    model: 'qwen3.6-plus',
+    modelDisplayName: 'Qwen3.6-Plus'
+  }
+];
+
+function firstDifferentFallback(currentProvider: string, currentModel: string): AlternativeModel {
+  return FALLBACK_MODELS.find(
+    (candidate) => candidate.provider !== currentProvider || candidate.model !== currentModel
+  ) || FALLBACK_MODELS[0];
+}
+
 /**
  * 根据当前场景智能推荐备用模型
  */
@@ -190,46 +231,42 @@ function getAlternativeModel(
   hasMedia?: boolean,
   mediaType?: string
 ): AlternativeModel {
-  // 当前可用模型不支持视频，推荐最通用的视觉模型，让前端继续阻止视频上传。
+  const defaultFallback = firstDifferentFallback(currentProvider, currentModel);
+
+  // 视频请求优先推荐当前已验证可用的 Gemini 多模态模型。
   if (mediaType?.startsWith('video')) {
-    return {
-      provider: 'bailian',
-      model: 'qwen3.6-plus',
-      modelDisplayName: 'Qwen3.6-Plus'
-    };
+    return defaultFallback.provider === 'gemini'
+      ? defaultFallback
+      : FALLBACK_MODELS[0];
   }
 
   // 如果有图片
   if (hasMedia && mediaType?.startsWith('image')) {
-    return {
-      provider: 'bailian',
-      model: 'qwen3.6-plus',
-      modelDisplayName: 'Qwen3.6-Plus'
-    };
+    return defaultFallback;
   }
 
   // 根据消息内容判断任务类型
   const isCode = isCodeRelated(message);
   const isTranslation = isTranslationRelated(message);
 
-  if (isCode) {
+  if (currentProvider === 'gemini') {
+    return defaultFallback;
+  }
+
+  if (isCode && currentModel !== 'qwen3-coder-plus') {
     return {
       provider: 'bailian',
       model: 'qwen3-coder-plus',
       modelDisplayName: 'Qwen3-Coder-Plus'
     };
-  } else if (isTranslation) {
+  } else if (isTranslation && currentModel !== 'qwen3.6-plus') {
     return {
       provider: 'bailian',
       model: 'qwen3.6-plus',
       modelDisplayName: 'Qwen3.6-Plus'
     };
   } else {
-    return {
-      provider: 'bailian',
-      model: 'qwen3.5-plus',
-      modelDisplayName: 'Qwen3.5-Plus'
-    };
+    return defaultFallback;
   }
 }
 
@@ -274,6 +311,8 @@ export function getProviderDisplayName(provider: string): string {
   switch (provider) {
     case 'bailian':
       return '阿里云百炼';
+    case 'gemini':
+      return 'Google Gemini';
     default:
       return provider;
   }

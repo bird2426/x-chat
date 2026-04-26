@@ -456,6 +456,317 @@
     align-items: center;
 }
 
+/* Cyber Fortune Card */
+.fortuneCard {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(14, 165, 233, 0.28);
+    background:
+        radial-gradient(circle at 18% 18%, rgba(34, 211, 238, 0.2), transparent 28%),
+        radial-gradient(circle at 82% 0%, rgba(37, 99, 235, 0.22), transparent 32%),
+        linear-gradient(135deg, #08111f 0%, #111827 48%, #0f172a 100%);
+    color: #e0f2fe;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.24);
+}
+
+.fortuneCard::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(125, 211, 252, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(125, 211, 252, 0.06) 1px, transparent 1px);
+    background-size: 22px 22px;
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 80%);
+    pointer-events: none;
+}
+
+.fortuneScanline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -40%;
+    height: 44%;
+    background: linear-gradient(to bottom, transparent, rgba(56, 189, 248, 0.22), transparent);
+    animation: fortuneScan 2.4s ease-in-out 0.1s both;
+    pointer-events: none;
+}
+
+.fortuneHeader,
+.fortuneFooter,
+.fortuneReveal,
+.fortuneStage {
+    position: relative;
+    z-index: 1;
+}
+
+.fortuneHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 20px 8px;
+}
+
+.fortuneKicker {
+    color: #7dd3fc;
+    font-family: var(--font-geist-mono), monospace;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+}
+
+.fortuneTitle {
+    margin-top: 4px;
+    color: #f8fafc;
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.fortuneCategory {
+    padding: 5px 10px;
+    border: 1px solid rgba(125, 211, 252, 0.36);
+    border-radius: 999px;
+    background: rgba(8, 47, 73, 0.58);
+    color: #bae6fd;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.fortuneStage {
+    min-height: 146px;
+    display: grid;
+    place-items: center;
+    margin: 0 20px;
+}
+
+.fortuneRing {
+    position: absolute;
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
+    border: 1px solid rgba(125, 211, 252, 0.28);
+    animation: fortuneRingPulse 1.4s ease-out both;
+}
+
+.fortuneRing span {
+    position: absolute;
+    inset: 10px;
+    border-radius: 50%;
+    border: 1px dashed rgba(56, 189, 248, 0.5);
+    animation: fortuneSpin 1.25s linear both;
+}
+
+.fortuneRing span:nth-child(2) {
+    inset: 23px;
+    border-color: rgba(147, 197, 253, 0.42);
+    animation-direction: reverse;
+}
+
+.fortuneRing span:nth-child(3) {
+    inset: 37px;
+    border-style: solid;
+    border-color: rgba(224, 242, 254, 0.36);
+}
+
+.fortuneStick {
+    width: 42px;
+    height: 112px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 12px;
+    border-radius: 999px 999px 8px 8px;
+    background: linear-gradient(180deg, #e0f2fe 0%, #38bdf8 45%, #0369a1 100%);
+    box-shadow:
+        0 0 28px rgba(56, 189, 248, 0.58),
+        inset 0 0 18px rgba(255, 255, 255, 0.36);
+    transform-origin: 50% 100%;
+    animation: fortuneDraw 1.28s cubic-bezier(0.2, 0.9, 0.2, 1.08) both;
+}
+
+.fortuneStickLabel {
+    color: #082f49;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.fortuneParticles {
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    pointer-events: none;
+}
+
+.fortuneParticles span {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #7dd3fc;
+    box-shadow: 0 0 12px #38bdf8;
+    animation: fortuneSpark 1.32s ease-out both;
+}
+
+.fortuneParticles span:nth-child(1) { left: 12%; top: 42%; --spark-x: -44px; --spark-y: -22px; }
+.fortuneParticles span:nth-child(2) { left: 24%; top: 18%; --spark-x: -20px; --spark-y: -42px; }
+.fortuneParticles span:nth-child(3) { left: 52%; top: 12%; --spark-x: 16px; --spark-y: -46px; }
+.fortuneParticles span:nth-child(4) { left: 76%; top: 26%; --spark-x: 38px; --spark-y: -28px; }
+.fortuneParticles span:nth-child(5) { left: 82%; top: 62%; --spark-x: 44px; --spark-y: 14px; }
+.fortuneParticles span:nth-child(6) { left: 28%; top: 76%; --spark-x: -24px; --spark-y: 34px; }
+
+.fortuneReveal {
+    margin: 0 20px 18px;
+    padding: 16px;
+    border: 1px solid rgba(125, 211, 252, 0.26);
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.72);
+    animation: fortuneReveal 0.62s ease-out 1.05s both;
+}
+
+.fortuneLevel {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #075985;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.fortuneResultTitle {
+    margin-top: 10px;
+    color: #ffffff;
+    font-size: 19px;
+    font-weight: 900;
+}
+
+.fortuneText {
+    margin-top: 8px;
+    color: #cbd5e1;
+    font-size: 14px;
+    line-height: 1.65;
+}
+
+.fortuneFooter {
+    display: grid;
+    grid-template-columns: minmax(140px, 0.8fr) 1.2fr;
+    gap: 12px;
+    padding: 14px 20px 18px;
+    border-top: 1px solid rgba(125, 211, 252, 0.18);
+    background: rgba(2, 6, 23, 0.28);
+    animation: fortuneReveal 0.5s ease-out 1.24s both;
+}
+
+.fortuneFooterLabel {
+    display: block;
+    color: #7dd3fc;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+}
+
+.fortuneFooterValue {
+    display: block;
+    margin-top: 4px;
+    color: #f8fafc;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.fortuneTip {
+    color: #bae6fd;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+@keyframes fortuneScan {
+    from {
+        transform: translateY(-20%);
+        opacity: 0;
+    }
+    25% {
+        opacity: 1;
+    }
+    to {
+        transform: translateY(320%);
+        opacity: 0;
+    }
+}
+
+@keyframes fortuneSpin {
+    from {
+        transform: rotate(0deg) scale(0.78);
+        opacity: 0;
+    }
+    20% {
+        opacity: 1;
+    }
+    to {
+        transform: rotate(1turn) scale(1);
+        opacity: 0.9;
+    }
+}
+
+@keyframes fortuneRingPulse {
+    from {
+        transform: scale(0.62);
+        opacity: 0;
+    }
+    60% {
+        opacity: 1;
+    }
+    to {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+}
+
+@keyframes fortuneDraw {
+    0% {
+        transform: translateY(42px) rotate(-18deg) scale(0.72);
+        opacity: 0;
+    }
+    42% {
+        transform: translateY(0) rotate(14deg) scale(1.02);
+        opacity: 1;
+    }
+    72% {
+        transform: rotate(-7deg) scale(1);
+    }
+    100% {
+        transform: rotate(0deg) scale(1);
+    }
+}
+
+@keyframes fortuneSpark {
+    0% {
+        transform: translate(0, 0) scale(0.4);
+        opacity: 0;
+    }
+    30% {
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--spark-x), var(--spark-y)) scale(0);
+        opacity: 0;
+    }
+}
+
+@keyframes fortuneReveal {
+    from {
+        transform: translateY(10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
 /* Polish Text Card Styles */
 .polishCard {
     background: #ffffff;
@@ -579,4 +890,20 @@
 
 .copyButton:hover {
     background: #0369a1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fortuneScanline,
+    .fortuneRing,
+    .fortuneRing span,
+    .fortuneStick,
+    .fortuneParticles span,
+    .fortuneReveal,
+    .fortuneFooter {
+        animation: none;
+    }
+
+    .fortuneParticles {
+        display: none;
+    }
 }

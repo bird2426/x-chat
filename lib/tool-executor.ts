@@ -164,34 +164,53 @@ export class ToolExecutor {
     }
 
     const modeDescriptions: Record<string, string> = {
-      formal: "正式化学术风格，提升语言的专业性和严谨性",
-      concise: "精简冗余表达，保留核心信息",
-      expand: "扩充细节和论证，增加学术深度",
-      translate_en: "中译英，保持学术英语风格",
-      translate_zh: "英译中，保持学术中文风格"
+      formal: "正式化学术风格，提升语言的专业性、准确性和论证严谨性",
+      concise: "精简冗余表达，压缩重复和口语化内容，同时完整保留核心信息",
+      expand: "在不新增事实的前提下补足必要的逻辑衔接、限定条件和学术表达",
+      translate_en: "中译英，使用准确、自然、克制的学术英语表达",
+      translate_zh: "英译中，使用准确、自然、克制的学术中文表达"
     };
 
     const modeDesc = modeDescriptions[mode] || modeDescriptions.formal;
+    const outputSchema = {
+      original_text: text,
+      mode,
+      field,
+      polished_text: "润色后的文本",
+      changes: ["不超过3条，概括关键修改及理由"],
+      key_improvements: "用一句话总结主要改进"
+    };
 
-    const prompt = `你是一位专业的学术写作助手。请对以下文本进行润色改写。
+    const prompt = `你是一位严谨的学术期刊编辑，擅长在不改变作者原意的前提下提升论文文本质量。
 
-**原始文本**：
+请对以下文本进行学术润色或翻译。
+
+【原始文本】
 ${text}
 
-**润色要求**：
+【任务设置】
 - 模式：${modeDesc}
 - 学科领域：${field}
 
-**输出要求**：
-请返回以下 JSON 格式（不要包含 markdown 代码块标记）：
-{
-  "original_text": "${text}",
-  "mode": "${mode}",
-  "field": "${field}",
-  "polished_text": "润色后的文本",
-  "changes": ["修改说明1", "修改说明2"],
-  "key_improvements": "主要改进点总结"
-}`;
+【硬性约束】
+1. 不得改变原意，不得新增原文没有提供的事实、数据、实验结果、引用或结论。
+2. 必须保留原文的不确定性和限定语，例如“可能”“初步表明”“在一定程度上”“may”“suggest”等；不得擅自改成确定性结论。
+3. 必须保留并准确处理专业术语、变量名、公式、数字、单位、缩写、LaTeX 命令、引用标记（如 \\cite{}、[1]、(Author, Year)）。
+4. 避免夸大表达。除非原文已有明确依据，不要使用“显著”“根本”“证明”“突破性”“大幅”等增强结论力度的词。
+5. 优先提升清晰度、逻辑衔接、句法紧凑度和学术语体；减少口语化、重复和机械的 AI 腔表达。
+6. 如原文存在歧义或信息不足，只做保守润色，并在 changes 中简要指出。
+
+【模式细则】
+- formal：改为正式论文表达，保持客观、克制、严谨。
+- concise：删除冗余和重复，但不删减必要限定条件、关键术语和研究信息。
+- expand：只补充原文可直接推出的逻辑衔接或上下文表达，不引入新事实。
+- translate_en：译为自然学术英语，避免中式直译；保留术语、引用、公式和不确定性。
+- translate_zh：译为自然学术中文，避免翻译腔；保留术语、引用、公式和不确定性。
+
+【输出要求】
+只返回合法 JSON，不要使用 Markdown 代码块，不要添加 JSON 以外的解释文字。
+JSON 结构如下：
+${JSON.stringify(outputSchema, null, 2)}`;
 
     try {
       const result = await callBailianAPI(
@@ -199,7 +218,7 @@ ${text}
         prompt,
         [],
         undefined,
-        "你是一个专业的学术写作助手，专注于学术论文的语言润色和改写。"
+        "你是一个严谨的学术期刊编辑。你只输出合法 JSON，并严格避免改变原意、夸大结论或新增事实。"
       );
 
       const cleanJson = result.replace(/```json/g, '').replace(/```/g, '').trim();

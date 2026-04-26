@@ -1,13 +1,13 @@
 # X-Chat
 
-一个面向学术研究和论文写作的 AI 聊天助手，支持阿里云百炼模型、多模态输入、本地多会话历史和工具调用。
+一个面向学术研究和论文写作的 AI 聊天助手，支持阿里云百炼和 Google Gemini 模型、多模态输入、本地多会话历史和工具调用。
 
 ## 特性
 
 - 学术助手人设：论文润色、翻译、文献检索辅助和研究问题回答。
 - 多会话历史：使用 IndexedDB 在浏览器本地持久化保存会话，并在左侧侧栏展示。
 - 流式响应：聊天接口支持 NDJSON 流式输出。
-- 多模型选择：通过阿里云百炼 OpenAI-compatible 接口调用 Qwen、GLM、Kimi、MiniMax 等模型。
+- 多模型选择：支持阿里云百炼 OpenAI-compatible 模型，以及已验证可用的 Gemini Flash / Flash-Lite 模型。
 - 工具调用：支持文本润色、天气、网页搜索、计算、时间和旅行规划等工具。
 - 多模态输入：支持图片和视频上传，前端会按模型能力限制可用输入。
 
@@ -21,6 +21,7 @@ npm install
 ### 2. 配置 `.env.local`
 ```env
 BAILIAN_API_KEY=your_bailian_api_key
+GOOGLE_API_KEY=your_google_api_key
 TAVILY_API_KEY=your_tavily_api_key
 
 CHAT_LOG_LEVEL=info
@@ -41,7 +42,7 @@ npm run dev
 ## 技术栈
 
 - **Frontend**: Next.js (App Router), CSS Modules
-- **AI**: Aliyun Bailian / DashScope (OpenAI Compatible)
+- **AI**: Aliyun Bailian / DashScope (OpenAI Compatible), Google Gemini
 - **Tools**: Open-Meteo, Tavily
 
 ## License

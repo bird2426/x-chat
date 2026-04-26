@@ -1,95 +1,5 @@
 import OpenAI from "openai";
-
-export interface AIProvider {
-  id: string;
-  name: string;
-  models: AIModel[];
-  requiresApiKey: boolean;
-}
-
-export interface AIModel {
-  id: string;
-  name: string;
-  supportsVision: boolean;
-  supportsVideo: boolean;
-}
-
-export const AI_PROVIDERS: AIProvider[] = [
-  {
-    id: "bailian",
-    name: "阿里云百炼",
-    requiresApiKey: true,
-    models: [
-      // 千问
-      {
-        id: "qwen3.6-plus",
-        name: "Qwen3.6-Plus",
-        supportsVision: true,
-        supportsVideo: false,
-      },
-      {
-        id: "qwen3.5-plus",
-        name: "Qwen3.5-Plus",
-        supportsVision: true,
-        supportsVideo: false,
-      },
-      {
-        id: "qwen3-max-2026-01-23",
-        name: "Qwen3-Max",
-        supportsVision: false,
-        supportsVideo: false,
-      },
-      {
-        id: "qwen3-coder-next",
-        name: "Qwen3-Coder-Next",
-        supportsVision: false,
-        supportsVideo: false,
-      },
-      {
-        id: "qwen3-coder-plus",
-        name: "Qwen3-Coder-Plus",
-        supportsVision: false,
-        supportsVideo: false,
-      },
-      // 智谱 GLM
-      {
-        id: "glm-5",
-        name: "GLM-5",
-        supportsVision: false,
-        supportsVideo: false,
-      },
-      {
-        id: "glm-4.7",
-        name: "GLM-4.7",
-        supportsVision: false,
-        supportsVideo: false,
-      },
-      // Kimi
-      {
-        id: "kimi-k2.5",
-        name: "Kimi-K2.5",
-        supportsVision: true,
-        supportsVideo: false,
-      },
-      // MiniMax
-      {
-        id: "MiniMax-M2.5",
-        name: "MiniMax-M2.5",
-        supportsVision: false,
-        supportsVideo: false,
-      },
-    ],
-  },
-];
-
-export function getProvider(providerId: string): AIProvider | undefined {
-  return AI_PROVIDERS.find((p) => p.id === providerId);
-}
-
-export function getModel(providerId: string, modelId: string): AIModel | undefined {
-  const provider = getProvider(providerId);
-  return provider?.models.find((m) => m.id === modelId);
-}
+import { Content, GoogleGenerativeAI, Part } from "@google/generative-ai";
 
 interface ChatMessage {
   role: "user" | "bot";
@@ -99,6 +9,27 @@ interface ChatMessage {
 interface MediaData {
   data: string;
   mimeType: string;
+}
+
+let proxyDispatcherConfigured = false;
+
+async function configureNodeFetchProxy() {
+  if (proxyDispatcherConfigured || typeof window !== "undefined") return;
+
+  const proxyUrl =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy;
+
+  if (!proxyUrl) {
+    proxyDispatcherConfigured = true;
+    return;
+  }
+
+  const { ProxyAgent, setGlobalDispatcher } = await import("undici");
+  setGlobalDispatcher(new ProxyAgent(proxyUrl));
+  proxyDispatcherConfigured = true;
 }
 
 function createBailianClient() {
@@ -190,6 +121,92 @@ export async function* streamBailianAPI(
     const content = chunk.choices[0]?.delta?.content;
     if (content) {
       yield content;
+    }
+  }
+}
+
+function createGeminiClient() {
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    throw new Error("GOOGLE_API_KEY is not defined");
+  }
+
+  return new GoogleGenerativeAI(apiKey);
+}
+
+function buildGeminiContents(message: string, history: ChatMessage[], media?: MediaData): Content[] {
+  const contents: Content[] = history
+    .filter((msg) => msg.content.trim())
+    .map((msg) => ({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content }],
+    }));
+
+  const parts: Part[] = [];
+  if (message) {
+    parts.push({ text: message });
+  }
+
+  if (media?.data) {
+    parts.push({
+      inlineData: {
+        data: media.data,
+        mimeType: media.mimeType,
+      },
+    });
+  }
+
+  contents.push({
+    role: "user",
+    parts: parts.length ? parts : [{ text: message || "请分析上传的内容。" }],
+  });
+
+  return contents;
+}
+
+export async function callGeminiAPI(
+  model: string,
+  message: string,
+  history: ChatMessage[],
+  media?: MediaData,
+  systemPrompt?: string
+): Promise<string> {
+  await configureNodeFetchProxy();
+  const client = createGeminiClient();
+  const generativeModel = client.getGenerativeModel({
+    model,
+    systemInstruction: systemPrompt,
+  });
+
+  const result = await generativeModel.generateContent({
+    contents: buildGeminiContents(message, history, media),
+  });
+
+  return result.response.text() || "没有响应";
+}
+
+export async function* streamGeminiAPI(
+  model: string,
+  message: string,
+  history: ChatMessage[],
+  media?: MediaData,
+  systemPrompt?: string
+): AsyncGenerator<string> {
+  await configureNodeFetchProxy();
+  const client = createGeminiClient();
+  const generativeModel = client.getGenerativeModel({
+    model,
+    systemInstruction: systemPrompt,
+  });
+
+  const result = await generativeModel.generateContentStream({
+    contents: buildGeminiContents(message, history, media),
+  });
+
+  for await (const chunk of result.stream) {
+    const text = chunk.text();
+    if (text) {
+      yield text;
     }
   }
 }

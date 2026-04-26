@@ -1,5 +1,5 @@
 import styles from './ModelSelector.module.css';
-import { AI_PROVIDERS } from '@/lib/ai-providers';
+import { AI_PROVIDERS } from '@/lib/ai-models';
 
 interface ModelSelectorProps {
     selectedProvider: string;
@@ -13,6 +13,7 @@ export function ModelSelector({ selectedProvider, selectedModel, onSelect, isOpe
     // Find info for current selection to display in header
     const currentProvider = AI_PROVIDERS.find(p => p.id === selectedProvider);
     const currentModel = currentProvider?.models.find(m => m.id === selectedModel);
+    const totalModels = AI_PROVIDERS.reduce((sum, provider) => sum + provider.models.length, 0);
 
     const toggleOpen = () => setIsOpen(!isOpen);
 
@@ -52,28 +53,43 @@ export function ModelSelector({ selectedProvider, selectedModel, onSelect, isOpe
                 <>
                     <div className={styles.selectorOverlay} onClick={() => setIsOpen(false)} />
                     <div className={styles.selectorDropdown}>
-                        <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>选择 AI 模型</h3>
+                        <div className={styles.selectorHeader}>
+                            <div>
+                                <div className={styles.selectorTitle}>选择 AI 模型</div>
+                                <div className={styles.selectorMeta}>{AI_PROVIDERS.length} 个服务商 · {totalModels} 个可用模型</div>
+                            </div>
+                            <div className={styles.currentPill}>
+                                {currentProvider?.name} · {currentModel?.name}
+                            </div>
+                        </div>
 
                         {AI_PROVIDERS.map((provider) => (
                             <div key={provider.id} className={styles.providerGroup}>
-                                <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', opacity: 0.8 }}>
-                                    {provider.name}
+                                <div className={styles.providerHeader}>
+                                    <div className={styles.providerName}>{provider.name}</div>
+                                    <div className={styles.providerCount}>{provider.models.length} 个模型</div>
                                 </div>
-                                {provider.models.map((model) => (
-                                    <button
-                                        key={model.id}
-                                        className={`${styles.modelOption} ${selectedProvider === provider.id && selectedModel === model.id ? styles.active : ''
-                                            }`}
-                                        onClick={() => handleSelect(provider.id, model.id)}
-                                    >
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 500 }}>{model.name}</div>
-                                            <div style={{ fontSize: '11px', opacity: 0.6, marginTop: '2px' }}>
-                                                {model.supportsVideo ? '📹 视频' : model.supportsVision ? '🖼️ 图片' : '💬 文本'}
-                                            </div>
-                                        </div>
-                                    </button>
-                                ))}
+                                <div className={styles.modelGrid}>
+                                    {provider.models.map((model) => {
+                                        const isActive = selectedProvider === provider.id && selectedModel === model.id;
+                                        const capability = model.supportsVideo ? '视频' : model.supportsVision ? '图片' : '文本';
+
+                                        return (
+                                            <button
+                                                key={model.id}
+                                                className={`${styles.modelOption} ${isActive ? styles.active : ''}`}
+                                                onClick={() => handleSelect(provider.id, model.id)}
+                                                title={`${provider.name} - ${model.name}`}
+                                            >
+                                                <div className={styles.modelName}>{model.name}</div>
+                                                <div className={styles.modelMeta}>
+                                                    <span className={styles.capability}>{capability}</span>
+                                                    {isActive && <span className={styles.activeBadge}>当前</span>}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         ))}
                     </div>

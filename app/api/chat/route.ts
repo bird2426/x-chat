@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callBailianAPI, getModel, streamBailianAPI } from "@/lib/ai-providers";
+import {
+  callBailianAPI,
+  callGeminiAPI,
+  streamBailianAPI,
+  streamGeminiAPI,
+} from "@/lib/ai-providers";
+import { getModel } from "@/lib/ai-models";
 import { ToolExecutor, extractToolCalls } from "@/lib/tool-executor";
 import { TOOL_SYSTEM_PROMPT } from "@/lib/tools";
 import { categorizeError } from "@/lib/error-handler";
@@ -44,6 +50,65 @@ function shouldAttemptToolCall(message: string): boolean {
   ];
 
   return toolKeywords.some((keyword) => normalized.includes(keyword));
+}
+
+async function callProviderAPI(
+  provider: string,
+  model: string,
+  message: string,
+  history: Array<{ role: "user" | "bot"; content: string }>,
+  media?: { data: string; mimeType: string },
+  systemPrompt?: string
+) {
+  if (provider === "bailian") {
+    return callBailianAPI(model, message, history, media, systemPrompt);
+  }
+  if (provider === "gemini") {
+    return callGeminiAPI(model, message, history, media, systemPrompt);
+  }
+  throw new Error(`Unsupported provider: ${provider}`);
+}
+
+function streamProviderAPI(
+  provider: string,
+  model: string,
+  message: string,
+  history: Array<{ role: "user" | "bot"; content: string }>,
+  media?: { data: string; mimeType: string },
+  systemPrompt?: string
+) {
+  if (provider === "bailian") {
+    return streamBailianAPI(model, message, history, media, systemPrompt);
+  }
+  if (provider === "gemini") {
+    return streamGeminiAPI(model, message, history, media, systemPrompt);
+  }
+  throw new Error(`Unsupported provider: ${provider}`);
+}
+
+function buildToolFinalMessage(
+  message: string,
+  toolCalls: Array<{
+    tool_name: string;
+    arguments: Record<string, unknown>;
+    result: string;
+  }>
+) {
+  const toolResults = toolCalls.map(tc =>
+    `工具: ${tc.tool_name}\n参数: ${JSON.stringify(tc.arguments)}\n结果: ${tc.result}`
+  ).join('\n\n');
+
+  const hasPolishResult = toolCalls.some((tc) => tc.tool_name === "polish_text");
+  if (hasPolishResult) {
+    return `${message}\n\n工具调用结果:\n${toolResults}\n\n请根据 polish_text 工具调用结果回答用户。要求：\n1. 只展示润色后文本和简要修改说明。\n2. 不要新增原文之外的写作建议、实验建议、数据建议或研究结论。\n3. 不要重复展示原文，除非用户明确要求对照。\n4. 保持回答简洁、清晰。`;
+  }
+
+  const hasFortuneResult = toolCalls.some((tc) => tc.tool_name === "cyber_fortune_telling");
+  if (hasFortuneResult) {
+    return `${message}\n\n工具调用结果:\n${toolResults}\n\n请用轻松、简短的语气告诉用户签文已抽出即可。要求：\n1. 不要学术化解读，不要扩展心理学、行为建议或研究结论。\n2. 不要重复完整签文内容，签文内容会由工具卡片展示。\n3. 只输出一句不超过 25 个汉字的提示。`;
+  }
+
+  return `${message}\n\n工具调用结果:\n${toolResults}\n\n请根据以上工具调用结果，给用户一个完整的回答。`;
 }
 
 export async function POST(req: NextRequest) {
@@ -145,12 +210,8 @@ export async function POST(req: NextRequest) {
         async start(controller) {
           let responseText = "";
           try {
-            if (provider !== "bailian") {
-              throw new Error(`Unsupported provider: ${provider}`);
-            }
-
             if (toolIntent) {
-              const firstPass = await callBailianAPI(model, message, history || [], media, systemPrompt);
+              const firstPass = await callProviderAPI(provider, model, message, history || [], media, systemPrompt);
               const calls = extractToolCalls(firstPass);
 
               if (calls.length > 0) {
@@ -172,12 +233,9 @@ export async function POST(req: NextRequest) {
 
                 send(controller, { type: "tool_calls", toolCalls });
 
-                const toolResults = toolCalls.map(tc =>
-                  `工具: ${tc.tool_name}\n参数: ${JSON.stringify(tc.arguments)}\n结果: ${tc.result}`
-                ).join('\n\n');
-                const finalMessage = `${message}\n\n工具调用结果:\n${toolResults}\n\n请根据以上工具调用结果，给用户一个完整的回答。`;
+                const finalMessage = buildToolFinalMessage(message, toolCalls);
 
-                for await (const token of streamBailianAPI(model, finalMessage, history || [], media, systemPrompt)) {
+                for await (const token of streamProviderAPI(provider, model, finalMessage, history || [], media, systemPrompt)) {
                   responseText += token;
                   send(controller, { type: "token", value: token });
                 }
@@ -188,7 +246,7 @@ export async function POST(req: NextRequest) {
                 }
               }
             } else {
-              for await (const token of streamBailianAPI(model, message, history || [], media, systemPrompt)) {
+              for await (const token of streamProviderAPI(provider, model, message, history || [], media, systemPrompt)) {
                 responseText += token;
                 send(controller, { type: "token", value: token });
               }
@@ -242,15 +300,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Call the appropriate API
-    if (provider === "bailian") {
-      text = await callBailianAPI(model, message, history || [], media, systemPrompt);
-    } else {
-      return NextResponse.json(
-        { error: `Unsupported provider: ${provider}` },
-        { status: 400 }
-      );
-    }
+    text = await callProviderAPI(provider, model, message, history || [], media, systemPrompt);
 
     // Extract and execute tool calls if tools are enabled
     if (enableTools) {
@@ -274,13 +324,9 @@ export async function POST(req: NextRequest) {
 
       // If there were tool calls, get final response with tool results
       if (toolCalls.length > 0) {
-        const toolResults = toolCalls.map(tc =>
-          `工具: ${tc.tool_name}\n参数: ${JSON.stringify(tc.arguments)}\n结果: ${tc.result}`
-        ).join('\n\n');
+        const finalMessage = buildToolFinalMessage(message, toolCalls);
 
-        const finalMessage = `${message}\n\n工具调用结果:\n${toolResults}\n\n请根据以上工具调用结果，给用户一个完整的回答。`;
-
-        text = await callBailianAPI(model, finalMessage, history || [], media, systemPrompt);
+        text = await callProviderAPI(provider, model, finalMessage, history || [], media, systemPrompt);
       }
     }
 
@@ -332,6 +378,7 @@ export async function POST(req: NextRequest) {
       suggestion: errorInfo.suggestion,
       alternativeProvider: errorInfo.alternativeProvider,
       alternativeModel: errorInfo.alternativeModel,
+      alternativeModelDisplayName: errorInfo.alternativeModelDisplayName,
     }, {
       status: errorInfo.status
     });

@@ -10,6 +10,7 @@ export interface ErrorInfo {
   suggestion: string;
   alternativeProvider?: string;
   alternativeModel?: string;
+  alternativeModelDisplayName?: string;
 }
 
 export interface MediaFile {
