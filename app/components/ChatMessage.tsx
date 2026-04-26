@@ -275,38 +275,21 @@ function ToolResult({ toolCall }: { toolCall: ToolCall }) {
     if (toolName === 'cyber_fortune_telling' && data?.fortune_level) {
         return (
             <div className={`${styles.toolCard} ${styles.fortuneCard}`}>
-                <div className={styles.fortuneScanline} />
                 <div className={styles.fortuneHeader}>
                     <div>
-                        <div className={styles.fortuneKicker}>CYBER ORACLE</div>
                         <div className={styles.fortuneTitle}>赛博灵签</div>
+                        <div className={styles.fortuneKicker}>今日签文已生成</div>
                     </div>
                     <div className={styles.fortuneCategory}>{data.category || '综合'}</div>
                 </div>
 
-                <div className={styles.fortuneStage} aria-label="赛博抽签动画">
-                    <div className={styles.fortuneRing}>
-                        <span />
-                        <span />
-                        <span />
-                    </div>
-                    <div className={styles.fortuneStick}>
-                        <div className={styles.fortuneStickLabel}>签</div>
-                    </div>
-                    <div className={styles.fortuneParticles}>
-                        <span />
-                        <span />
-                        <span />
-                        <span />
-                        <span />
-                        <span />
-                    </div>
-                </div>
-
                 <div className={styles.fortuneReveal}>
-                    <div className={styles.fortuneLevel}>{data.fortune_level}</div>
-                    <div className={styles.fortuneResultTitle}>{data.title}</div>
-                    <div className={styles.fortuneText}>{data.interpretation}</div>
+                    <div className={styles.fortuneSeal} aria-hidden="true">签</div>
+                    <div>
+                        <div className={styles.fortuneLevel}>{data.fortune_level}</div>
+                        <div className={styles.fortuneResultTitle}>{data.title}</div>
+                        <div className={styles.fortuneText}>{data.interpretation}</div>
+                    </div>
                 </div>
 
                 <div className={styles.fortuneFooter}>
