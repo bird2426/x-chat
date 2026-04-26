@@ -111,6 +111,14 @@ function buildToolFinalMessage(
   return `${message}\n\n工具调用结果:\n${toolResults}\n\n请根据以上工具调用结果，给用户一个完整的回答。`;
 }
 
+function shouldShowToolResultOnly(
+  toolCalls: Array<{
+    tool_name: string;
+  }>
+) {
+  return toolCalls.some((tc) => tc.tool_name === "polish_text");
+}
+
 export async function POST(req: NextRequest) {
   const requestId = randomUUID();
   const startedAt = Date.now();
@@ -233,11 +241,13 @@ export async function POST(req: NextRequest) {
 
                 send(controller, { type: "tool_calls", toolCalls });
 
-                const finalMessage = buildToolFinalMessage(message, toolCalls);
+                if (!shouldShowToolResultOnly(toolCalls)) {
+                  const finalMessage = buildToolFinalMessage(message, toolCalls);
 
-                for await (const token of streamProviderAPI(provider, model, finalMessage, history || [], media, systemPrompt)) {
-                  responseText += token;
-                  send(controller, { type: "token", value: token });
+                  for await (const token of streamProviderAPI(provider, model, finalMessage, history || [], media, systemPrompt)) {
+                    responseText += token;
+                    send(controller, { type: "token", value: token });
+                  }
                 }
               } else {
                 responseText = firstPass;
@@ -324,9 +334,13 @@ export async function POST(req: NextRequest) {
 
       // If there were tool calls, get final response with tool results
       if (toolCalls.length > 0) {
-        const finalMessage = buildToolFinalMessage(message, toolCalls);
+        if (shouldShowToolResultOnly(toolCalls)) {
+          text = "";
+        } else {
+          const finalMessage = buildToolFinalMessage(message, toolCalls);
 
-        text = await callProviderAPI(provider, model, finalMessage, history || [], media, systemPrompt);
+          text = await callProviderAPI(provider, model, finalMessage, history || [], media, systemPrompt);
+        }
       }
     }
 
