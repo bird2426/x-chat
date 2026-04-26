@@ -116,7 +116,7 @@ function shouldShowToolResultOnly(
     tool_name: string;
   }>
 ) {
-  return toolCalls.some((tc) => tc.tool_name === "polish_text");
+  return toolCalls.some((tc) => ["polish_text", "cyber_fortune_telling"].includes(tc.tool_name));
 }
 
 export async function POST(req: NextRequest) {
