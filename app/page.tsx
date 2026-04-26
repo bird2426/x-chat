@@ -675,42 +675,38 @@ export default function Home() {
             <div className={styles.helpHeader}>
               <div>
                 <div id="help-title" className={styles.helpTitle}>使用说明</div>
-                <div className={styles.helpSubtitle}>常用能力和操作入口</div>
+                <div className={styles.helpSubtitle}>简要了解 X-Chat 的主要用法</div>
               </div>
               <button className={styles.helpCloseButton} onClick={() => setShowHelp(false)} aria-label="关闭使用说明">
                 ×
               </button>
             </div>
 
-            <div className={styles.helpGrid}>
-              <div className={styles.helpItem}>
-                <div className={styles.helpItemTitle}>模型切换</div>
-                <p>点击顶部模型名称或“切换模型”，可在百炼和 Gemini 模型之间切换。模型限额或拥挤时报错气泡会给出推荐替代模型。</p>
-              </div>
-              <div className={styles.helpItem}>
-                <div className={styles.helpItemTitle}>论文润色</div>
-                <p>输入“帮我润色/改写/翻译这段……”，系统会调用论文润色工具，保留原意、引用、公式、数字和不确定性。</p>
-              </div>
-              <div className={styles.helpItem}>
-                <div className={styles.helpItemTitle}>文献与搜索</div>
-                <p>输入“搜索/查一下/最新论文”等关键词会调用网页搜索；配置 Tavily 后返回真实搜索结果。</p>
-              </div>
-              <div className={styles.helpItem}>
-                <div className={styles.helpItemTitle}>图片与视频</div>
-                <p>点击输入框左侧图片按钮上传媒体。前端会按当前模型能力限制图片或视频输入。</p>
-              </div>
-              <div className={styles.helpItem}>
-                <div className={styles.helpItemTitle}>赛博灵签</div>
-                <p>点击灵签按钮，或输入“帮我抽个赛博灵签”，会显示带动画的签文卡片。</p>
-              </div>
-              <div className={styles.helpItem}>
-                <div className={styles.helpItemTitle}>会话历史</div>
-                <p>左侧保存本地会话历史。历史存放在浏览器 IndexedDB，清除站点数据或更换浏览器后不会同步。</p>
-              </div>
-            </div>
+            <div className={styles.helpContent}>
+              <p>
+                X-Chat 是一个面向学术研究和论文写作的 AI 助手。你可以直接输入问题，也可以让它帮助润色论文段落、
+                翻译学术文本、检索资料、分析图片或视频内容。
+              </p>
 
-            <div className={styles.helpFooter}>
-              <span>快捷键：Enter 发送，Shift + Enter 换行，生成中可点红色按钮停止。</span>
+              <h3>常用方式</h3>
+              <ul>
+                <li>论文润色：输入“帮我润色这段文字……”“改得更像博士论文引言”等请求。</li>
+                <li>学术翻译：输入“翻译成学术英语”“英译中并保持论文语气”等请求。</li>
+                <li>文献与资料检索：输入“搜索……相关文献”“查一下……最新研究”等请求。</li>
+                <li>多模态输入：点击输入框左侧的图片按钮上传图片或视频，系统会根据当前模型能力处理。</li>
+                <li>赛博灵签：点击灵签按钮，或输入“帮我抽个赛博灵签”。</li>
+              </ul>
+
+              <h3>模型与历史</h3>
+              <p>
+                顶部可以切换模型。若某个模型因限额、拥挤或能力不支持而失败，错误提示里会给出可切换的备用模型。
+                左侧会保存本地会话历史；历史存放在当前浏览器中，清除站点数据或更换浏览器后不会同步。
+              </p>
+
+              <h3>快捷键</h3>
+              <p>
+                按 <strong>Enter</strong> 发送，按 <strong>Shift + Enter</strong> 换行。生成过程中可以点击红色停止按钮中断回复。
+              </p>
             </div>
           </section>
         </div>

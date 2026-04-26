@@ -242,10 +242,10 @@
 }
 
 .helpDialog {
-  width: min(760px, 100%);
+  width: min(680px, 100%);
   max-height: min(720px, calc(100dvh - 48px));
   overflow-y: auto;
-  border-radius: 14px;
+  border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.28);
   background: #ffffff;
   box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
@@ -290,42 +290,36 @@
   border-color: #cbd5e1;
 }
 
-.helpGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 16px 22px;
+.helpContent {
+  padding: 18px 22px 22px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.75;
 }
 
-.helpItem {
-  min-height: 118px;
-  padding: 14px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
+.helpContent p {
+  margin: 0 0 14px;
 }
 
-.helpItemTitle {
+.helpContent h3 {
+  margin: 18px 0 8px;
   color: #0f172a;
   font-size: 14px;
   font-weight: 850;
 }
 
-.helpItem p {
-  margin: 8px 0 0;
-  color: #475569;
-  font-size: 13px;
-  line-height: 1.6;
+.helpContent ul {
+  margin: 0 0 14px;
+  padding-left: 20px;
 }
 
-.helpFooter {
-  margin: 0 22px 22px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: #eff6ff;
-  color: #1e40af;
-  font-size: 13px;
-  font-weight: 700;
+.helpContent li {
+  margin: 6px 0;
+}
+
+.helpContent strong {
+  color: #1d4ed8;
+  font-weight: 800;
 }
 
 .aiAvatar {
@@ -655,17 +649,12 @@
     max-height: calc(100dvh - 24px);
   }
 
-  .helpGrid {
-    grid-template-columns: 1fr;
-    padding: 14px;
-  }
-
   .helpHeader {
     padding: 18px 16px 14px;
   }
 
-  .helpFooter {
-    margin: 0 14px 14px;
+  .helpContent {
+    padding: 14px 16px 18px;
   }
 }
 
