@@ -238,6 +238,41 @@
     }
 }
 
+@media (max-width: 720px) and (orientation: portrait) {
+    .selectorDropdown {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        right: 0;
+        max-height: calc(100dvh - 56px);
+        border-radius: 0 0 14px 14px;
+    }
+
+    .currentPill {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        line-height: 1.45;
+    }
+
+    .modelGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .modelOption {
+        min-height: auto;
+        padding: 12px;
+    }
+
+    .modelName {
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        font-size: 14px;
+        line-height: 1.35;
+    }
+}
+
 @media (max-width: 480px) {
     .modelGrid {
         grid-template-columns: 1fr;
