@@ -1,6 +1,7 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import styles from './ChatInput.module.css';
-import { MediaFile } from '@/app/types';
+import { MediaFile, QuoteReference } from '@/app/types';
+import { AI_PROVIDERS } from '@/lib/ai-models';
 
 interface ChatInputProps {
     input: string;
@@ -8,13 +9,65 @@ interface ChatInputProps {
     media: MediaFile | null;
     setMedia: (media: MediaFile | null) => void;
     isLoading: boolean;
+    quote?: QuoteReference | null;
+    onClearQuote?: () => void;
     onSubmit: () => void;
     onStop: () => void;
 }
 
-export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmit, onStop }: ChatInputProps) {
+export function ChatInput({ input, setInput, media, setMedia, isLoading, quote, onClearQuote, onSubmit, onStop }: ChatInputProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+    const [caretPosition, setCaretPosition] = useState(0);
+    const [activeMentionIndex, setActiveMentionIndex] = useState(0);
+    const [isMentionDismissed, setIsMentionDismissed] = useState(false);
+
+    const mentionOptions = useMemo(() => AI_PROVIDERS.flatMap((provider) => provider.models.map((model) => {
+        const mention = model.name.replace(/\s+/g, '-');
+
+        return {
+            providerName: provider.name,
+            modelName: model.name,
+            mention,
+            aliases: [
+                provider.name,
+                provider.id,
+                model.name,
+                mention,
+                model.id,
+                ...(model.mentionAliases || []),
+            ],
+            capability: model.supportsVideo ? '视频' : model.supportsVision ? '图片' : '文本',
+        };
+    })), []);
+
+    const activeMention = useMemo(() => {
+        const beforeCaret = input.slice(0, caretPosition);
+        const atIndex = beforeCaret.lastIndexOf('@');
+        if (atIndex < 0) return null;
+
+        const token = beforeCaret.slice(atIndex + 1);
+        if (/[\s@，。；;:,：、]/.test(token)) return null;
+        return {
+            start: atIndex,
+            end: caretPosition,
+            query: token,
+        };
+    }, [caretPosition, input]);
+
+    const filteredMentions = useMemo(() => {
+        if (!activeMention) return [];
+        const query = activeMention.query.toLowerCase().replace(/[\s._-]+/g, '');
+
+        return mentionOptions
+            .filter((option) => {
+                if (!query) return true;
+                return option.aliases.some((alias) => alias.toLowerCase().replace(/[\s._-]+/g, '').includes(query));
+            });
+    }, [activeMention, mentionOptions]);
+
+    const showMentionMenu = !isLoading && !isMentionDismissed && !!activeMention && filteredMentions.length > 0;
 
     // Auto-resize input
     useEffect(() => {
@@ -25,8 +78,70 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
         el.style.height = `${next}px`;
     }, [input]);
 
+    useEffect(() => {
+        setActiveMentionIndex(0);
+        setIsMentionDismissed(false);
+    }, [activeMention?.query]);
+
+    useEffect(() => {
+        if (!filteredMentions.length) return;
+        setActiveMentionIndex((idx) => Math.min(idx, filteredMentions.length - 1));
+    }, [filteredMentions.length]);
+
+    useEffect(() => {
+        if (!showMentionMenu) return;
+        mentionOptionRefs.current[activeMentionIndex]?.scrollIntoView({
+            block: 'nearest',
+        });
+    }, [activeMentionIndex, showMentionMenu]);
+
+    const syncCaretPosition = () => {
+        const el = inputRef.current;
+        if (!el) return;
+        setCaretPosition(el.selectionStart);
+    };
+
+    const insertMention = (mention: string) => {
+        if (!activeMention) return;
+
+        const replacement = `@${mention} `;
+        const nextInput = `${input.slice(0, activeMention.start)}${replacement}${input.slice(activeMention.end)}`;
+        const nextCaret = activeMention.start + replacement.length;
+        setInput(nextInput);
+        setCaretPosition(nextCaret);
+        setIsMentionDismissed(false);
+
+        requestAnimationFrame(() => {
+            inputRef.current?.focus();
+            inputRef.current?.setSelectionRange(nextCaret, nextCaret);
+        });
+    };
+
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if ((e.nativeEvent as any)?.isComposing) return;
+        if (showMentionMenu) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setActiveMentionIndex((idx) => (idx + 1) % filteredMentions.length);
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActiveMentionIndex((idx) => (idx - 1 + filteredMentions.length) % filteredMentions.length);
+                return;
+            }
+            if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                insertMention(filteredMentions[activeMentionIndex]?.mention || filteredMentions[0].mention);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setIsMentionDismissed(true);
+                return;
+            }
+        }
+
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             if (isLoading) return; // Loading state prevents submission
@@ -91,6 +206,24 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
                 </div>
             )}
 
+            {quote && (
+                <div className={styles.quotePreview}>
+                    <div className={styles.quotePreviewBody}>
+                        <div className={styles.quotePreviewAuthor}>引用 {quote.author}</div>
+                        <div className={styles.quotePreviewText}>{quote.content}</div>
+                    </div>
+                    <button
+                        type="button"
+                        className={styles.quotePreviewClose}
+                        onClick={onClearQuote}
+                        aria-label="取消引用"
+                        disabled={isLoading}
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
+
             <form className={styles.form} onSubmit={(e) => { e.preventDefault(); isLoading ? onStop() : onSubmit(); }}>
                 <input
                     type="file"
@@ -129,13 +262,42 @@ export function ChatInput({ input, setInput, media, setMedia, isLoading, onSubmi
                     </svg>
                 </button>
 
+                {showMentionMenu && (
+                    <div className={styles.mentionMenu} role="listbox" aria-label="选择要 @ 的模型">
+                        {filteredMentions.map((option, index) => (
+                            <button
+                                key={`${option.providerName}-${option.modelName}`}
+                                ref={(node) => {
+                                    mentionOptionRefs.current[index] = node;
+                                }}
+                                type="button"
+                                className={`${styles.mentionOption} ${index === activeMentionIndex ? styles.mentionOptionActive : ''}`}
+                                onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    insertMention(option.mention);
+                                }}
+                                role="option"
+                                aria-selected={index === activeMentionIndex}
+                            >
+                                <span className={styles.mentionName}>@{option.mention}</span>
+                                <span className={styles.mentionMeta}>{option.providerName} · {option.modelName} · {option.capability}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+
                 <textarea
                     ref={inputRef}
                     className={styles.input}
-                    placeholder={isLoading ? "正在思考..." : "输入消息..."}
+                    placeholder={isLoading ? "正在思考..." : "输入消息，@ 选择模型..."}
                     rows={1}
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={(e) => {
+                        setInput(e.target.value);
+                        setCaretPosition(e.target.selectionStart);
+                    }}
+                    onClick={syncCaretPosition}
+                    onKeyUp={syncCaretPosition}
                     onKeyDown={handleKeyDown}
                     disabled={isLoading}
                 />

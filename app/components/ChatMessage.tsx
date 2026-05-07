@@ -5,12 +5,23 @@ import { Message, ToolCall } from '@/app/types';
 
 interface ChatMessageProps {
     message: Message;
+    onQuote?: (message: Message) => void;
     onQuickSwitch?: (provider: string, model: string) => void;
     onManualSwitch?: () => void;
 }
 
-export function ChatMessage({ message, onQuickSwitch, onManualSwitch }: ChatMessageProps) {
+export function ChatMessage({ message, onQuote, onQuickSwitch, onManualSwitch }: ChatMessageProps) {
     const isUser = message.role === 'user';
+    const modelLabel = !isUser && (message.providerName || message.modelName)
+        ? `${message.providerName || 'AI'}${message.modelName ? ` · ${message.modelName}` : ''}`
+        : '';
+    const avatarLabel = message.provider === 'deepseek'
+        ? 'DS'
+        : message.provider === 'gemini'
+            ? 'G'
+            : message.provider === 'bailian'
+                ? 'Q'
+                : 'AI';
 
     return (
         <div className={`${styles.row} ${isUser ? styles.rowUser : styles.rowBot}`}>
@@ -25,15 +36,29 @@ export function ChatMessage({ message, onQuickSwitch, onManualSwitch }: ChatMess
                         justifyContent: 'center',
                         background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
                         color: 'white',
-                        fontSize: '16px',
+                        fontSize: avatarLabel.length > 1 ? '14px' : '16px',
                         fontWeight: 'bold'
                     }}>
-                        AI
+                        {avatarLabel}
                     </div>
                 </div>
             )}
 
             <div className={`${styles.bubble} ${isUser ? styles.bubbleUser : styles.bubbleBot}`}>
+                {modelLabel && (
+                    <div className={styles.modelLabel}>
+                        {message.mention ? `@${message.mention}` : modelLabel}
+                        <span>{modelLabel}</span>
+                    </div>
+                )}
+
+                {message.quote && (
+                    <div className={styles.quoteBlock}>
+                        <div className={styles.quoteAuthor}>{message.quote.author}</div>
+                        <div className={styles.quoteText}>{message.quote.content}</div>
+                    </div>
+                )}
+
                 {/* Media Preview (Image/Video) */}
                 {message.media && (
                     <div className={styles.bubbleMedia}>
@@ -80,7 +105,13 @@ export function ChatMessage({ message, onQuickSwitch, onManualSwitch }: ChatMess
                                     message.error!.alternativeModel!
                                 )}
                             >
-                                🔄 切换到 {message.error.alternativeProvider === 'bailian' ? '阿里云百炼' : 'Google Gemini'}
+                                🔄 切换到 {message.error.alternativeProvider === 'bailian'
+                                    ? '阿里云百炼'
+                                    : message.error.alternativeProvider === 'gemini'
+                                        ? 'Google Gemini'
+                                        : message.error.alternativeProvider === 'deepseek'
+                                            ? 'DeepSeek'
+                                            : message.error.alternativeProvider}
                                 {message.error.alternativeModelDisplayName ? ` - ${message.error.alternativeModelDisplayName}` : ''}
                             </button>
                         )}
@@ -89,6 +120,19 @@ export function ChatMessage({ message, onQuickSwitch, onManualSwitch }: ChatMess
                             onClick={() => onManualSwitch?.()}
                         >
                             ⚙️ {message.error.alternativeProvider ? '手动选择' : '选择其他模型'}
+                        </button>
+                    </div>
+                )}
+
+                {message.content && (
+                    <div className={styles.messageActions}>
+                        <button
+                            type="button"
+                            className={styles.quoteButton}
+                            onClick={() => onQuote?.(message)}
+                            title="引用这条消息"
+                        >
+                            引用
                         </button>
                     </div>
                 )}

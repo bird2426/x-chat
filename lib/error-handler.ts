@@ -92,7 +92,11 @@ function isModelCapability(error: string): boolean {
 
 function handleApiKeyMissing(provider: string, error: string): ErrorInfo {
   const providerName = getProviderDisplayName(provider);
-  const envVarName = provider === 'gemini' ? 'GOOGLE_API_KEY' : 'BAILIAN_API_KEY';
+  const envVarName = provider === 'gemini'
+    ? 'GOOGLE_API_KEY'
+    : provider === 'deepseek'
+      ? 'DEEPSEEK_API_KEY'
+      : 'BAILIAN_API_KEY';
   const alternative = getAlternativeModel(provider, '', undefined, false);
 
   return {
@@ -193,6 +197,11 @@ interface AlternativeModel {
 }
 
 const FALLBACK_MODELS: AlternativeModel[] = [
+  {
+    provider: 'deepseek',
+    model: 'deepseek-v4-pro',
+    modelDisplayName: 'DeepSeek V4 Pro'
+  },
   {
     provider: 'gemini',
     model: 'gemini-2.5-flash-lite',
@@ -313,6 +322,8 @@ export function getProviderDisplayName(provider: string): string {
       return '阿里云百炼';
     case 'gemini':
       return 'Google Gemini';
+    case 'deepseek':
+      return 'DeepSeek';
     default:
       return provider;
   }

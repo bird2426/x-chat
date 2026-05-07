@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   callBailianAPI,
+  callDeepSeekAPI,
   callGeminiAPI,
   streamBailianAPI,
+  streamDeepSeekAPI,
   streamGeminiAPI,
 } from "@/lib/ai-providers";
 import { getModel } from "@/lib/ai-models";
@@ -66,6 +68,9 @@ async function callProviderAPI(
   if (provider === "gemini") {
     return callGeminiAPI(model, message, history, media, systemPrompt);
   }
+  if (provider === "deepseek") {
+    return callDeepSeekAPI(model, message, history, media, systemPrompt);
+  }
   throw new Error(`Unsupported provider: ${provider}`);
 }
 
@@ -82,6 +87,9 @@ function streamProviderAPI(
   }
   if (provider === "gemini") {
     return streamGeminiAPI(model, message, history, media, systemPrompt);
+  }
+  if (provider === "deepseek") {
+    return streamDeepSeekAPI(model, message, history, media, systemPrompt);
   }
   throw new Error(`Unsupported provider: ${provider}`);
 }

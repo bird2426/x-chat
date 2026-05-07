@@ -20,12 +20,27 @@ export interface MediaFile {
   type: 'image' | 'video';
 }
 
-export interface Message {
+export interface QuoteReference {
+  id?: string;
   role: 'user' | 'bot';
   content: string;
+  author: string;
+  modelName?: string;
+}
+
+export interface Message {
+  id?: string;
+  role: 'user' | 'bot';
+  content: string;
+  quote?: QuoteReference;
   media?: MediaFile;
   toolCalls?: ToolCall[];
   error?: ErrorInfo;
+  provider?: string;
+  model?: string;
+  providerName?: string;
+  modelName?: string;
+  mention?: string;
 }
 
 export interface ChatSession {

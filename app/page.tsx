@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './page.module.css';
 import { AI_PROVIDERS } from '@/lib/ai-models';
-import { ChatSession, ErrorInfo, Message, MediaFile, ToolCall } from '@/app/types';
+import { ChatSession, ErrorInfo, Message, MediaFile, QuoteReference, ToolCall } from '@/app/types';
 import { ChatMessage } from '@/app/components/ChatMessage';
 import { ModelSelector } from '@/app/components/ModelSelector';
 import { ChatInput } from '@/app/components/ChatInput';
@@ -59,6 +59,7 @@ function normalizeMessage(value: any): Message | null {
   if (typeof value.content !== 'string') return null;
 
   const message: Message = {
+    id: typeof value.id === 'string' ? value.id : undefined,
     role: value.role,
     content: value.content,
   };
@@ -66,9 +67,23 @@ function normalizeMessage(value: any): Message | null {
   if (Array.isArray(value.toolCalls)) {
     message.toolCalls = value.toolCalls;
   }
+  if (value.quote && typeof value.quote === 'object' && typeof value.quote.content === 'string') {
+    message.quote = {
+      id: typeof value.quote.id === 'string' ? value.quote.id : undefined,
+      role: value.quote.role === 'user' ? 'user' : 'bot',
+      content: value.quote.content,
+      author: typeof value.quote.author === 'string' ? value.quote.author : '引用消息',
+      modelName: typeof value.quote.modelName === 'string' ? value.quote.modelName : undefined,
+    };
+  }
   if (value.error && typeof value.error === 'object') {
     message.error = value.error;
   }
+  if (typeof value.provider === 'string') message.provider = value.provider;
+  if (typeof value.model === 'string') message.model = value.model;
+  if (typeof value.providerName === 'string') message.providerName = value.providerName;
+  if (typeof value.modelName === 'string') message.modelName = value.modelName;
+  if (typeof value.mention === 'string') message.mention = value.mention;
 
   return message;
 }
@@ -116,6 +131,119 @@ function formatSessionTime(timestamp: number) {
   return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 }
 
+function compactQuoteContent(content: string) {
+  const compact = content.replace(/\s+/g, ' ').trim();
+  if (!compact) return '这条消息没有文本内容';
+  return compact.length > 180 ? `${compact.slice(0, 180)}...` : compact;
+}
+
+function getMessageAuthor(message: Message) {
+  if (message.role === 'user') return '我';
+  return message.modelName || message.providerName || 'AI';
+}
+
+function createQuoteReference(message: Message): QuoteReference {
+  return {
+    id: message.id,
+    role: message.role,
+    content: compactQuoteContent(message.content),
+    author: getMessageAuthor(message),
+    modelName: message.modelName,
+  };
+}
+
+function buildMessageWithQuote(message: string, quote?: QuoteReference | null) {
+  if (!quote) return message;
+
+  return `用户正在引用一条历史消息继续对话。请优先结合引用内容回答当前问题。\n\n【被引用消息】\n来源：${quote.author}\n内容：${quote.content}\n\n【当前消息】\n${message}`;
+}
+
+interface MentionTarget {
+  provider: string;
+  model: string;
+  providerName: string;
+  modelName: string;
+  mention: string;
+  instruction: string;
+  supportsVision: boolean;
+  supportsVideo: boolean;
+}
+
+function normalizeMentionToken(value: string) {
+  return value.toLowerCase().replace(/[\s._-]+/g, '');
+}
+
+function getMentionCandidates() {
+  return AI_PROVIDERS.flatMap((provider) => provider.models.map((model) => {
+    const aliases = [
+      provider.name,
+      provider.id,
+      model.name,
+      model.id,
+      ...(model.mentionAliases ?? []),
+    ];
+
+    return {
+      provider,
+      model,
+      aliases: aliases.map((alias) => normalizeMentionToken(alias)).filter(Boolean),
+    };
+  }));
+}
+
+function findMentionTarget(rawName: string, instruction: string): MentionTarget | null {
+  const token = normalizeMentionToken(rawName);
+  if (!token) return null;
+
+  const matched = getMentionCandidates().find(({ aliases }) => aliases.includes(token))
+    ?? getMentionCandidates().find(({ aliases }) => aliases.some((alias) => alias.includes(token) || token.includes(alias)));
+
+  if (!matched) return null;
+
+  return {
+    provider: matched.provider.id,
+    model: matched.model.id,
+    providerName: matched.provider.name,
+    modelName: matched.model.name,
+    mention: rawName,
+    instruction: instruction.trim(),
+    supportsVision: matched.model.supportsVision,
+    supportsVideo: matched.model.supportsVideo,
+  };
+}
+
+function parseMentionTargets(message: string): MentionTarget[] {
+  const mentionRegex = /@([^\s@，。；;:,：、]+)/g;
+  const matches = [...message.matchAll(mentionRegex)];
+  if (!matches.length) return [];
+
+  const targets: MentionTarget[] = [];
+  const seen = new Set<string>();
+
+  matches.forEach((match, index) => {
+    const rawName = match[1];
+    const start = (match.index ?? 0) + match[0].length;
+    const end = matches[index + 1]?.index ?? message.length;
+    const instruction = message.slice(start, end).trim();
+    const target = findMentionTarget(rawName, instruction);
+    if (!target) return;
+
+    const key = `${target.provider}/${target.model}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    targets.push(target);
+  });
+
+  return targets;
+}
+
+function buildMentionMessage(originalMessage: string, target: MentionTarget, isGroupChat: boolean) {
+  if (!isGroupChat) return originalMessage;
+
+  const specificInstruction = target.instruction || originalMessage;
+  return `这是一次点名模型任务。用户完整消息如下：\n${originalMessage}\n\n你是 ${target.providerName} - ${target.modelName}，用户 @你的具体任务是：\n${specificInstruction}\n\n请只完成你被 @ 的任务；如果任务是评价其他模型输出，但当前上下文还没有对方输出，请先给出评价维度、检查清单或需要对方输出后再评价的说明。`;
+}
+
 function serializeSessions(sessions: ChatSession[]) {
   return sessions
     .slice()
@@ -123,11 +251,18 @@ function serializeSessions(sessions: ChatSession[]) {
     .slice(0, SESSION_LIMIT)
     .map((session) => ({
       ...session,
-      messages: session.messages.slice(-HISTORY_LIMIT).map(({ role, content, toolCalls, error }) => ({
+      messages: session.messages.slice(-HISTORY_LIMIT).map(({ id, role, content, quote, toolCalls, error, provider, model, providerName, modelName, mention }) => ({
+        id,
         role,
         content,
+        quote,
         toolCalls,
         error,
+        provider,
+        model,
+        providerName,
+        modelName,
+        mention,
       })),
     }));
 }
@@ -196,6 +331,7 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [media, setMedia] = useState<MediaFile | null>(null);
+  const [quoteTarget, setQuoteTarget] = useState<QuoteReference | null>(null);
 
   const defaults = useMemo(() => getDefaultProviderModel(), []);
   const [selectedProvider, setSelectedProvider] = useState(defaults.provider);
@@ -208,7 +344,7 @@ export default function Home() {
   const [showToast, setShowToast] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const abortControllersRef = useRef<AbortController[]>([]);
   const saveVersionRef = useRef(0);
 
   const sortedSessions = useMemo(
@@ -402,6 +538,7 @@ export default function Home() {
     setActiveSessionId(session.id);
     setInput('');
     setMedia(null);
+    setQuoteTarget(null);
     setIsSidebarOpen(false);
   };
 
@@ -411,6 +548,7 @@ export default function Home() {
     setActiveSessionId(session.id);
     setSelectedProvider(session.provider);
     setSelectedModel(session.model);
+    setQuoteTarget(null);
     setIsSidebarOpen(false);
   };
 
@@ -460,14 +598,24 @@ export default function Home() {
       messages: [WELCOME_MESSAGE],
       updatedAt: Date.now(),
     }));
+    setQuoteTarget(null);
+  };
+
+  const handleQuoteMessage = (message: Message) => {
+    if (!message.content.trim()) return;
+    setQuoteTarget(createQuoteReference(message));
+    setTimeout(() => {
+      const composer = document.querySelector('textarea');
+      if (composer instanceof HTMLTextAreaElement) composer.focus();
+    }, 0);
   };
 
   const handleStop = () => {
-    if (!abortControllerRef.current || !activeSessionId) return;
+    if (!abortControllersRef.current.length || !activeSessionId) return;
 
     const sessionId = activeSessionId;
-    abortControllerRef.current.abort();
-    abortControllerRef.current = null;
+    abortControllersRef.current.forEach((controller) => controller.abort());
+    abortControllersRef.current = [];
     setIsLoading(false);
 
     updateSessionMessages(sessionId, (prev) => {
@@ -490,16 +638,16 @@ export default function Home() {
 
   const updateStreamingBotMessage = (
     sessionId: string,
-    botIndex: number,
+    botId: string,
     content: string,
     toolCalls?: ToolCall[],
     error?: ErrorInfo
   ) => {
     updateSessionMessages(sessionId, (prev) => {
       const next = [...prev];
-      const targetIndex = next[botIndex]?.role === 'bot' ? botIndex : next.length - 1;
+      const targetIndex = next.findIndex((message) => message.id === botId && message.role === 'bot');
+      if (targetIndex < 0) return prev;
       const existing = next[targetIndex];
-      if (!existing || existing.role !== 'bot') return prev;
       next[targetIndex] = {
         ...existing,
         content,
@@ -510,7 +658,7 @@ export default function Home() {
     });
   };
 
-  const readStreamingResponse = async (res: Response, sessionId: string, botIndex: number) => {
+  const readStreamingResponse = async (res: Response, sessionId: string, botId: string) => {
     if (!res.body) throw new Error('ReadableStream is not available');
 
     const reader = res.body.getReader();
@@ -535,21 +683,21 @@ export default function Home() {
         const event = JSON.parse(line);
         if (event.type === 'token') {
           assistantContent += event.value || '';
-          updateStreamingBotMessage(sessionId, botIndex, assistantContent, toolCalls);
+          updateStreamingBotMessage(sessionId, botId, assistantContent, toolCalls);
         } else if (event.type === 'tool_calls') {
           toolCalls = event.toolCalls || [];
-          updateStreamingBotMessage(sessionId, botIndex, assistantContent || '正在整理工具调用结果...', toolCalls);
+          updateStreamingBotMessage(sessionId, botId, assistantContent || '正在整理工具调用结果...', toolCalls);
         } else if (event.type === 'error') {
           hasStreamError = true;
           updateStreamingBotMessage(
             sessionId,
-            botIndex,
+            botId,
             formatErrorMessage(event.error),
             toolCalls,
             normalizeErrorInfo(event.error)
           );
         } else if (event.type === 'done') {
-          updateStreamingBotMessage(sessionId, botIndex, assistantContent || event.text || '', toolCalls);
+          updateStreamingBotMessage(sessionId, botId, assistantContent || event.text || '', toolCalls);
         }
       }
     }
@@ -562,7 +710,7 @@ export default function Home() {
     }
 
     if (!hasStreamError) {
-      updateStreamingBotMessage(sessionId, botIndex, assistantContent, toolCalls);
+      updateStreamingBotMessage(sessionId, botId, assistantContent, toolCalls);
     }
   };
 
@@ -571,90 +719,136 @@ export default function Home() {
 
     const userMessage = input.trim();
     const currentMedia = media;
+    const currentQuote = quoteTarget;
     const sessionId = activeSession.id;
-    const currentProvider = AI_PROVIDERS.find((p) => p.id === selectedProvider);
-    const currentModel = currentProvider?.models.find((m) => m.id === selectedModel);
+    const selectedProviderInfo = AI_PROVIDERS.find((p) => p.id === selectedProvider);
+    const selectedModelInfo = selectedProviderInfo?.models.find((m) => m.id === selectedModel);
+    const mentionTargets = parseMentionTargets(userMessage);
+    const targets: MentionTarget[] = mentionTargets.length
+      ? mentionTargets
+      : selectedProviderInfo && selectedModelInfo
+        ? [{
+            provider: selectedProviderInfo.id,
+            model: selectedModelInfo.id,
+            providerName: selectedProviderInfo.name,
+            modelName: selectedModelInfo.name,
+            mention: selectedModelInfo.name,
+            instruction: userMessage,
+            supportsVision: selectedModelInfo.supportsVision,
+            supportsVideo: selectedModelInfo.supportsVideo,
+          }]
+        : [];
+
+    if (!targets.length) {
+      showToastNotification('没有找到可用模型，请先选择模型。');
+      return;
+    }
 
     if (currentMedia) {
       const isVideo = currentMedia.type === 'video';
-      if (isVideo && !currentModel?.supportsVideo) {
-        showToastNotification(`模型 ${currentModel?.name} 不支持视频，请切换模型。`);
-        return;
-      }
-      if (!isVideo && !currentModel?.supportsVision) {
-        showToastNotification(`模型 ${currentModel?.name} 不支持图片，请切换模型。`);
+      const unsupported = targets.find((target) => isVideo ? !target.supportsVideo : !target.supportsVision);
+      if (unsupported) {
+        showToastNotification(`模型 ${unsupported.modelName} 不支持${isVideo ? '视频' : '图片'}，请调整 @ 模型。`);
         return;
       }
     }
 
     const userEntry: Message = {
+      id: createId(),
       role: 'user',
       content: userMessage,
+      quote: currentQuote || undefined,
       media: currentMedia ? { ...currentMedia } : undefined,
     };
     const newMessages = [...messages, userEntry];
-    const botEntry: Message = { role: 'bot', content: '' };
-    const botIndex = newMessages.length;
+    const botEntries: Message[] = targets.map((target) => ({
+      id: createId(),
+      role: 'bot',
+      content: targets.length > 1 ? `正在等待 ${target.modelName} 回复...` : '',
+      provider: target.provider,
+      model: target.model,
+      providerName: target.providerName,
+      modelName: target.modelName,
+      mention: target.mention,
+    }));
 
     updateSession(sessionId, (session) => ({
       ...session,
       title: session.title === '新会话' ? deriveTitle(newMessages) : session.title,
-      messages: [...newMessages, botEntry].slice(-HISTORY_LIMIT),
+      messages: [...newMessages, ...botEntries].slice(-HISTORY_LIMIT),
       provider: selectedProvider,
       model: selectedModel,
       updatedAt: Date.now(),
     }));
     setInput('');
     setMedia(null);
+    setQuoteTarget(null);
     setIsLoading(true);
 
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
+    const history = messages.slice(1).map((message) => {
+      const speaker = message.role === 'bot' && message.modelName ? `${message.modelName}: ` : '';
+      return { role: message.role, content: `${speaker}${message.content}` };
+    });
+    const controllers = targets.map(() => new AbortController());
+    abortControllersRef.current = controllers;
 
     try {
-      const history = messages.slice(1).map((message) => ({ role: message.role, content: message.content }));
+      await Promise.all(targets.map(async (target, index) => {
+        const botId = botEntries[index].id!;
+        try {
+          const quotedUserMessage = buildMessageWithQuote(userMessage, currentQuote);
+          const targetMessage = buildMentionMessage(quotedUserMessage, target, mentionTargets.length > 0);
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/x-ndjson',
+            },
+            body: JSON.stringify({
+              message: targetMessage,
+              media: currentMedia ? { data: currentMedia.data, mimeType: currentMedia.mimeType } : null,
+              history,
+              provider: target.provider,
+              model: target.model,
+              enableTools: mentionTargets.length === 0,
+              stream: true,
+            }),
+            signal: controllers[index].signal,
+          });
 
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/x-ndjson',
-        },
-        body: JSON.stringify({
-          message: userMessage,
-          media: currentMedia ? { data: currentMedia.data, mimeType: currentMedia.mimeType } : null,
-          history,
-          provider: selectedProvider,
-          model: selectedModel,
-          enableTools: true,
-          stream: true,
-        }),
-        signal: abortController.signal,
-      });
+          const contentType = res.headers.get('content-type') || '';
+          if (!res.ok) {
+            const data = await readErrorResponse(res);
+            updateStreamingBotMessage(sessionId, botId, formatErrorMessage(data), undefined, normalizeErrorInfo(data));
+            return;
+          }
 
-      const contentType = res.headers.get('content-type') || '';
-      if (!res.ok) {
-        const data = await readErrorResponse(res);
-        updateStreamingBotMessage(sessionId, botIndex, formatErrorMessage(data), undefined, normalizeErrorInfo(data));
-        return;
-      }
-
-      if (contentType.includes('application/x-ndjson')) {
-        await readStreamingResponse(res, sessionId, botIndex);
-      } else if (contentType.includes('application/json')) {
-        const data = await res.json();
-        updateStreamingBotMessage(sessionId, botIndex, data.text, data.toolCalls);
-      } else {
-        const data = await readErrorResponse(res);
-        updateStreamingBotMessage(sessionId, botIndex, formatErrorMessage(data));
-      }
+          if (contentType.includes('application/x-ndjson')) {
+            await readStreamingResponse(res, sessionId, botId);
+          } else if (contentType.includes('application/json')) {
+            const data = await res.json();
+            updateStreamingBotMessage(sessionId, botId, data.text, data.toolCalls);
+          } else {
+            const data = await readErrorResponse(res);
+            updateStreamingBotMessage(sessionId, botId, formatErrorMessage(data));
+          }
+        } catch (error: any) {
+          if (error.name === 'AbortError') return;
+          console.error(error);
+          updateStreamingBotMessage(sessionId, botId, '**网络请求失败**\n\n请检查您的网络连接是否正常。');
+        }
+      }));
     } catch (error: any) {
       if (error.name === 'AbortError') return;
       console.error(error);
-      updateStreamingBotMessage(sessionId, botIndex, '**网络请求失败**\n\n请检查您的网络连接是否正常。');
+      botEntries.forEach((botEntry) => {
+        if (botEntry.id) {
+          updateStreamingBotMessage(sessionId, botEntry.id, '**网络请求失败**\n\n请检查您的网络连接是否正常。');
+        }
+      });
     } finally {
       setIsLoading(false);
-      abortControllerRef.current = null;
+      abortControllersRef.current = [];
     }
   };
 
@@ -693,6 +887,7 @@ export default function Home() {
                 <li>论文润色：输入“帮我润色这段文字……”“调整为更正式的学术表达”等请求。</li>
                 <li>学术翻译：输入“翻译成学术英语”“英译中并保持论文语气”等请求。</li>
                 <li>文献与资料检索：输入“搜索……相关文献”“查一下……最新研究”等请求。</li>
+                <li>多模型群聊：在消息中使用 @DeepSeek、@Gemini、@Qwen3.6-Plus 等提及模型，系统会让被 @ 的模型并行回复。</li>
                 <li>多模态输入：点击输入框左侧的图片按钮上传图片或视频，系统会根据当前模型能力处理。</li>
                 <li>赛博灵签：点击灵签按钮，或输入“帮我抽个赛博灵签”。</li>
               </ul>
@@ -785,6 +980,7 @@ export default function Home() {
               <ChatMessage
                 key={`${activeSession?.id || 'session'}-${idx}`}
                 message={msg}
+                onQuote={handleQuoteMessage}
                 onQuickSwitch={(p, m) => handleModelChange(p, m)}
                 onManualSwitch={() => setShowModelSelector(true)}
               />
@@ -812,6 +1008,8 @@ export default function Home() {
           media={media}
           setMedia={setMedia}
           isLoading={isLoading}
+          quote={quoteTarget}
+          onClearQuote={() => setQuoteTarget(null)}
           onSubmit={handleSubmit}
           onStop={handleStop}
         />
